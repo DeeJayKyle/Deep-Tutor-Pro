@@ -173,7 +173,15 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/native-source"
           git archive HEAD | tar -x -C "$RUNNER_TEMP/native-source"
-          cp --parents src/services/storage.ts src/initial/workspaceDefaults.ts vite.config.ts scripts/prepare-native.mjs packaging/windows/package.json packaging/windows/main.cjs packaging/android/package.json packaging/android/capacitor.config.json "$RUNNER_TEMP/native-source"
+          python3 - <<'PYCOPY'
+          import os, shutil
+          from pathlib import Path
+          target = Path(os.environ['RUNNER_TEMP']) / 'native-source'
+          for name in ['src/services/storage.ts', 'src/initial/workspaceDefaults.ts', 'vite.config.ts', 'scripts/prepare-native.mjs', 'packaging/windows/package.json', 'packaging/windows/main.cjs', 'packaging/android/package.json', 'packaging/android/capacitor.config.json']:
+              dest = target / name
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(name, dest)
+          PYCOPY
           (cd "$RUNNER_TEMP/native-source" && zip -qr "$GITHUB_WORKSPACE/native-assets/Deep-Tutor-Pro-1.6.14-Native-Source.zip" .)
           (cd native-assets && sha256sum *.exe *.apk *.zip > SHA256SUMS.txt)
           gh release view v1.6.14 --json body --jq .body > "$RUNNER_TEMP/release-notes.md"

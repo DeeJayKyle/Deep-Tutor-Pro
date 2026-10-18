@@ -59,6 +59,7 @@ In Low-Rank Adaptation (LoRA), rather than updating full weight matrices $W_0 \\
     a.href = url;
     a.download = `${docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.md`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (

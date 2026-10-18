@@ -52,7 +52,7 @@ export const AssessmentBuilderView: React.FC<AssessmentBuilderViewProps> = ({
     assessments.find((a) => a.courseUnitId === activeUnitId)?.id || assessments[0]?.id || ''
   );
 
-  const activePaper = assessments.find((a) => a.id === activePaperId) || assessments[0];
+  const activePaper = assessments.find((a) => a.id === activePaperId && a.courseUnitId === currentUnit?.id) || assessments.find(a => a.courseUnitId === currentUnit?.id);
 
   // Toggle topics
   const toggleTopic = (title: string) => {
@@ -134,10 +134,8 @@ export const AssessmentBuilderView: React.FC<AssessmentBuilderViewProps> = ({
         academicYear: '2025/2026',
         termSemester: `Year ${currentUnit.yearOfStudy}, Semester ${currentUnit.semester}`,
         duration: isStandard ? '3 Hours' : '1.5 Hours',
-        totalMarks: isStandard ? 100 : 50,
-        instructions: isStandard
-          ? 'Section A: Answer ALL 20 MCQs (20 Marks). Section B: Answer ALL 5 Short Answer Questions (40 Marks). Section C: Answer any TWO Clinical Case Scenarios (40 Marks).'
-          : 'Answer all questions in the provided answer booklet. Write legibly and show all working.',
+        totalMarks: questions.reduce((sum, question) => sum + question.marks, 0),
+        instructions: 'Sample paper: answer all four questions. Section A: 2 marks; Section B: 8 marks; Section C: 20 marks. Review model answers before use.',
         testedTopics: selectedTopicTitles,
         questions,
         markingSchemeNotes: 'Graders must strictly adhere to the model solutions and mark allocations provided in the marking scheme.',
@@ -166,6 +164,7 @@ export const AssessmentBuilderView: React.FC<AssessmentBuilderViewProps> = ({
     a.href = url;
     a.download = `${activePaper.title.replace(/\s+/g, '_')}.md`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (

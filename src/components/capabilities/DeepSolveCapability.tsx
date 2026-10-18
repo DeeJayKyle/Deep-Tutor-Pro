@@ -20,7 +20,7 @@ export const DeepSolveCapability: React.FC = () => {
   const [problemText, setProblemText] = useState('Solve dosage calculation: A child weighing 18 kg is prescribed Amoxicillin 40 mg/kg/day divided into 3 equal doses for 7 days. The available suspension is 125 mg / 5 mL. Calculate: (1) Total daily dose in mg, (2) Single dose in mg, (3) Volume in mL per single dose, (4) Total volume in mL required for the full 7-day course.');
   const [isSolving, setIsSolving] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(4);
-  const [scratchpad, setScratchpad] = useState('Step 1: Total mg/day = 18 kg * 40 mg/kg/day = 720 mg/day.\nStep 2: Single dose (TID) = 720 mg / 3 = 240 mg.\nStep 3: Concentration = 125 mg per 5 mL -> Volume per dose = (240 / 125) * 5 mL = 9.6 mL.\nStep 4: Total volume = 9.6 mL * 3 doses/day * 7 days = 201.6 mL (dispense 2 x 100 mL or 3 x 100 mL bottles).');
+  const [scratchpad, setScratchpad] = useState('Step 1: Total mg/day = 18 kg * 40 mg/kg/day = 720 mg/day.\nStep 2: Single dose (TID) = 720 mg / 3 = 240 mg.\nStep 3: Concentration = 125 mg per 5 mL -> Volume per dose = (240 / 125) * 5 mL = 9.6 mL.\nStep 4: Total volume = 9.6 mL * 3 doses/day * 7 days = 201.6 mL (sample arithmetic only; not dispensing guidance).');
 
   // Multimodal Attachment States
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -43,13 +43,7 @@ export const DeepSolveCapability: React.FC = () => {
   }, [isRecordingVoice]);
 
   const toggleVoiceRecording = () => {
-    if (isRecordingVoice) {
-      setIsRecordingVoice(false);
-      setRecordedVoiceUrl('Voice Note Recorded (0:08) - Transcribed: "Calculate renal dosage adjustment for Vancomycin with eCrCl 35 mL/min..."');
-      setProblemText('A patient with eCrCl = 35 mL/min requires intravenous Vancomycin for MRSA bacteremia. Calculate the maintenance dose and interval to achieve target trough 15 - 20 mcg/mL.');
-    } else {
-      setIsRecordingVoice(true);
-    }
+    alert('Voice recording and transcription are not connected in this demo. Type your text instead.');
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,7 +84,7 @@ export const DeepSolveCapability: React.FC = () => {
             <h2 className="text-base font-semibold text-white tracking-tight">Multimodal Deep Solve Engine</h2>
           </div>
           <p className="text-xs text-slate-400">
-            Solve complex pharmaceutical calculations, proofs, and assignments from typed text, voice notes, images, or documents.
+            Worked example only. Changing the input does not compute a new solution. Do not use for clinical decisions.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-indigo-900/40 px-3 py-1.5 rounded-lg border border-indigo-700/50 text-indigo-300">

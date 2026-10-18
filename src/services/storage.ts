@@ -1,3 +1,5 @@
+import { z } from "zod";
+import * as Schemas from "./schemas";
 import {
   ChatMessage,
   TaskItem,
@@ -25,7 +27,7 @@ import {
   INITIAL_DRAFTS,
   INITIAL_PARTNERS,
   DEFAULT_PROVIDERS
-} from '../data/mockData';
+} from '../initial/workspaceDefaults';
 
 const KEYS = {
   MESSAGES: 'deeptutor_messages_v2',
@@ -47,21 +49,51 @@ const KEYS = {
   DRAFTS: 'deeptutor_drafts_v2'
 };
 
+
+const STORES = {
+  curriculum: { key: KEYS.CURRICULUM, schema: Schemas.CurriculumPackageSchema.nullable() },
+  lectureNotes: { key: KEYS.LECTURE_NOTES, schema: Schemas.LectureNoteBlockSchema.array() },
+  assessments: { key: KEYS.ASSESSMENTS, schema: Schemas.AssessmentPaperSchema.array() },
+  students: { key: KEYS.STUDENTS, schema: Schemas.StudentBiodataSchema.array() },
+  marks: { key: KEYS.MARKS, schema: Schemas.StudentMarkRecordSchema.array() },
+  references: { key: KEYS.REFERENCES, schema: Schemas.ReferenceDocumentSchema.array() },
+  messages: { key: KEYS.MESSAGES, schema: Schemas.ChatMessageSchema.array() },
+  tasks: { key: KEYS.TASKS, schema: Schemas.TaskItemSchema.array() },
+  questions: { key: KEYS.QUESTIONS, schema: Schemas.QuestionItemSchema.array() },
+  memory: { key: KEYS.MEMORY, schema: Schemas.MemoryTraceSchema.array() },
+  knowledgeBases: { key: KEYS.KNOWLEDGE_BASES, schema: Schemas.KnowledgeBaseSchema.array() },
+  classes: { key: KEYS.CLASSES, schema: Schemas.AcademicClassSchema.array() },
+  drafts: { key: KEYS.DRAFTS, schema: Schemas.TeachingDraftSchema.array() },
+  partners: { key: KEYS.PARTNERS, schema: Schemas.PartnerAgentSchema.array() },
+  providers: { key: KEYS.PROVIDERS, schema: Schemas.ProviderConfigSchema.array() },
+  selectedTools: { key: KEYS.SELECTED_TOOLS, schema: Schemas.BuiltinToolSchema.array() },
+  workspace: { key: KEYS.WORKSPACE, schema: z.string() },
+};
+
+function storageError() {
+  window.dispatchEvent(new Event('deeptutor-storage-error'));
+}
+
 function getStored<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (err) {
-    console.warn(`Error reading key ${key} from localStorage:`, err);
+    if (item === null) return defaultValue;
+    const validator = Object.values(STORES).find(store => store.key === key)!.schema;
+    const result = validator.safeParse(JSON.parse(item));
+    if (!result.success) return defaultValue;
+    return result.data as T;
+  } catch {
     return defaultValue;
   }
 }
 
-function setStored<T>(key: string, value: T): void {
+function setStored<T>(key: string, value: T): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.warn(`Error saving key ${key} to localStorage:`, err);
+    return true;
+  } catch {
+    storageError();
+    return false;
   }
 }
 
@@ -75,8 +107,8 @@ export const PHARMACY_CURRICULUM_SAMPLE: CurriculumPackage = {
   institution: 'National Health Sciences Institute & Allied Medical Council',
   level: 'Diploma',
   durationYears: 3,
-  totalCourseUnits: 6,
-  totalCurriculumHours: 1240,
+  totalCourseUnits: 3,
+  totalCurriculumHours: 270,
   overviewSummary: 'Comprehensive tertiary pharmaceutical training program designed to produce competent, ethical, and clinical pharmacy technicians proficient in pharmacology, dispensing, pharmaceutical chemistry, sterile compounding, pharmacognosy, and community health pharmacy.',
   analyzedAt: '2026-10-18',
   courseUnits: [
@@ -323,8 +355,8 @@ export const INITIAL_ASSESSMENT_PAPERS: AssessmentPaper[] = [
     academicYear: '2025/2026',
     termSemester: 'Year 1, Semester 1',
     duration: '3 Hours',
-    totalMarks: 100,
-    instructions: 'This examination paper contains THREE sections: Section A (20 Multiple Choice Questions - 20 Marks), Section B (5 Short Answer Questions - 40 Marks), and Section C (2 Long Essay Case Scenarios - 40 Marks). Answer ALL questions in Section A and Section B, and any TWO questions in Section C.',
+    totalMarks: 30,
+    instructions: 'Sample paper: answer all four questions. Section A: 2 marks; Section B: 8 marks; Section C: 20 marks. Review model answers before use.',
     testedTopics: [
       'Introduction to Pharmacokinetics & Drug Absorption',
       'Drug Distribution & Plasma Protein Binding',
@@ -477,7 +509,7 @@ export const INITIAL_STUDENT_MARKS: StudentMarkRecord[] = [
     practicalScore: 15,
     finalExamScore: 28,
     totalPercentage: 74,
-    letterGrade: 'B+',
+    letterGrade: 'B',
     gradePoint: 4.0,
     remarks: 'Strong comprehension of ADME mechanics'
   },
@@ -602,7 +634,7 @@ export const StorageService = {
 
   exportFullBackup: (): string => {
     const data = {
-      version: '2.0.0',
+      version: '2.1.0',
       exportedAt: new Date().toISOString(),
       stores: {
         curriculum: StorageService.getCurriculumPackage(),
@@ -617,39 +649,47 @@ export const StorageService = {
         memory: StorageService.getMemory(),
         knowledgeBases: StorageService.getKnowledgeBases(),
         classes: StorageService.getClasses(),
-        partners: StorageService.getPartners()
+        partners: StorageService.getPartners(),
+        drafts: StorageService.getDrafts(),
+        providers: StorageService.getProviders(),
+        selectedTools: StorageService.getSelectedTools(),
+        workspace: StorageService.getCurrentWorkspace()
       }
     };
     return JSON.stringify(data, null, 2);
   },
 
   importBackup: (jsonString: string): boolean => {
+    // Validate the entire payload before touching any current data.
+    const previous = new Map<string, string | null>();
     try {
       const data = JSON.parse(jsonString);
-      if (data.stores) {
-        if (data.stores.curriculum !== undefined) StorageService.setCurriculumPackage(data.stores.curriculum);
-        if (data.stores.lectureNotes) StorageService.setLectureNotes(data.stores.lectureNotes);
-        if (data.stores.assessments) StorageService.setAssessments(data.stores.assessments);
-        if (data.stores.students) StorageService.setStudents(data.stores.students);
-        if (data.stores.marks) StorageService.setMarks(data.stores.marks);
-        if (data.stores.references) StorageService.setReferences(data.stores.references);
-        if (data.stores.messages) StorageService.setMessages(data.stores.messages);
-        if (data.stores.tasks) StorageService.setTasks(data.stores.tasks);
-        if (data.stores.questions) StorageService.setQuestions(data.stores.questions);
-        if (data.stores.memory) StorageService.setMemory(data.stores.memory);
-        if (data.stores.knowledgeBases) StorageService.setKnowledgeBases(data.stores.knowledgeBases);
-        if (data.stores.classes) StorageService.setClasses(data.stores.classes);
-        if (data.stores.partners) StorageService.setPartners(data.stores.partners);
-        return true;
+      if (!data || !['2.0.0', '2.1.0'].includes(data.version) ||
+          !data.stores || typeof data.stores !== 'object' || Array.isArray(data.stores)) return false;
+      const updates: [string, string][] = [];
+      for (const [name, store] of Object.entries(STORES)) {
+        if (!Object.hasOwn(data.stores, name)) continue;
+        const parsed = store.schema.safeParse(data.stores[name]);
+        if (!parsed.success) return false;
+        updates.push([store.key, JSON.stringify(parsed.data)]);
       }
-      return false;
-    } catch (e) {
-      console.error('Failed to import backup:', e);
+      if (!updates.length) return false;
+      for (const [key] of updates) previous.set(key, localStorage.getItem(key));
+      for (const [key, value] of updates) localStorage.setItem(key, value);
+      return true;
+    } catch {
+      // Preserve the old workspace if a write fails (for example, quota exceeded).
+      for (const [key, value] of previous) {
+        try {
+          if (value === null) localStorage.removeItem(key);
+          else localStorage.setItem(key, value);
+        } catch { storageError(); }
+      }
       return false;
     }
   },
 
   resetDefaults: (): void => {
-    localStorage.clear();
+    for (const key of Object.values(KEYS)) localStorage.removeItem(key);
   }
 };

@@ -32,7 +32,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({ partners }) => {
   const [inputText, setInputText] = useState('');
 
   const activePartner = partners.find((p) => p.id === selectedPartnerId) || partners[0];
-  const activeChat = messages[activePartner.id] || [];
+  const activeChat = messages[activePartner?.id || ''] || [];
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +53,8 @@ export const PartnersView: React.FC<PartnersViewProps> = ({ partners }) => {
     }, 600);
   };
 
+  if (!activePartner) return <div className="p-6 text-slate-300">No partners configured. External messaging bridges are not connected in this build.</div>;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0b0f19] text-slate-200 overflow-hidden">
       {/* Top Header */}
@@ -68,7 +70,7 @@ export const PartnersView: React.FC<PartnersViewProps> = ({ partners }) => {
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-sky-950/40 border border-sky-800 text-sky-300 px-2.5 py-1 rounded">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Runtime Bus Connected</span>
+          <span>Demo — no messaging bridge</span>
         </div>
       </div>
 

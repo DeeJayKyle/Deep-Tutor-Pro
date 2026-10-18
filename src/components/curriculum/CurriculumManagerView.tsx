@@ -1,3 +1,4 @@
+import { readSourceText } from '../../services/files';
 import React, { useState } from 'react';
 import {
   BookOpen,
@@ -47,15 +48,16 @@ export const CurriculumManagerView: React.FC<CurriculumManagerViewProps> = ({
   // Edit states for unit / topics
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+    try {
+      const text = await readSourceText(file);
       setUploadedFile(file);
-      // Simulate reading and setting title
-      const name = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
-      setCourseTitleInput(name);
-      setRawText(`Full curriculum document loaded: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB).\nIncludes syllabus guidelines, competency frameworks, modular course unit breakdowns, lecture contact hours, and practical clinical schedules.`);
-    }
+      setCourseTitleInput(file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '));
+      setRawText(text);
+    } catch (error) { alert(error instanceof Error ? error.message : 'Could not read file.'); }
+    e.target.value = '';
   };
 
   const handleRunAnalysis = () => {
@@ -176,7 +178,7 @@ export const CurriculumManagerView: React.FC<CurriculumManagerViewProps> = ({
         durationYears: durationInput,
         totalCourseUnits: generatedUnits.length,
         totalCurriculumHours: generatedUnits.reduce((acc, u) => acc + u.totalContactHours, 0),
-        overviewSummary: `Analyzed from uploaded curriculum specifications. Decomposed into ${generatedUnits.length} foundational course units organized by contact hours, learning outcomes, and practical laboratory schedules.`,
+        overviewSummary: `Demo pharmacy template. This does not analyze your uploaded text. Contains ${generatedUnits.length} foundational course units organized by contact hours, learning outcomes, and practical laboratory schedules.`,
         analyzedAt: new Date().toISOString().slice(0, 10),
         courseUnits: generatedUnits
       };

@@ -152,6 +152,7 @@ export const DeepResearchCapability: React.FC = () => {
               a.href = url;
               a.download = 'deeptutor_research_report.md';
               a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
             className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 px-2.5 py-1 rounded transition-colors"
           >

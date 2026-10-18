@@ -1,3 +1,4 @@
+import { updateScore, csvCell } from '../../services/gradebook';
 import React, { useState } from 'react';
 import {
   Users,
@@ -89,34 +90,13 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({
     };
   };
 
-  const calculateGrade = (total: number): { grade: 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D' | 'F'; gp: number } => {
-    if (total >= 80) return { grade: 'A', gp: 5.0 };
-    if (total >= 75) return { grade: 'B+', gp: 4.5 };
-    if (total >= 70) return { grade: 'B', gp: 4.0 };
-    if (total >= 65) return { grade: 'C+', gp: 3.5 };
-    if (total >= 60) return { grade: 'C', gp: 3.0 };
-    if (total >= 50) return { grade: 'D', gp: 2.0 };
-    return { grade: 'F', gp: 0.0 };
-  };
-
   const handleUpdateScore = (
     studentId: string,
     field: 'cat1Score' | 'cat2Score' | 'assignmentScore' | 'practicalScore' | 'finalExamScore',
     value: number
   ) => {
-    const current = getStudentMark(studentId);
-    const updatedMark = { ...current, [field]: value };
-    const total =
-      updatedMark.cat1Score +
-      updatedMark.cat2Score +
-      updatedMark.assignmentScore +
-      updatedMark.practicalScore +
-      updatedMark.finalExamScore;
-
-    const { grade, gp } = calculateGrade(total);
-    updatedMark.totalPercentage = total;
-    updatedMark.letterGrade = grade;
-    updatedMark.gradePoint = gp;
+    if (!selectedUnitId || !courseUnits.some(u => u.id === selectedUnitId)) return;
+    const updatedMark = updateScore(getStudentMark(studentId), field, value);
 
     const existingIndex = marks.findIndex(
       (m) => m.studentId === studentId && m.courseUnitId === selectedUnitId
@@ -133,6 +113,10 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({
   const handleSaveStudent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !regNo.trim()) return;
+    if (students.some(s => s.id !== editingStudent?.id && s.regNumber.trim().toLowerCase() === regNo.trim().toLowerCase())) {
+      alert('A student with this registration number already exists.');
+      return;
+    }
 
     if (editingStudent) {
       const updated = students.map((s) =>
@@ -163,13 +147,13 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({
         yearOfStudy: selectedYear,
         classCohort: `Diploma Pharmacy - Year ${selectedYear}`,
         contactPhone: phone,
-        email: email || `${fullName.toLowerCase().replace(/\s+/g, '.')}@pharmacy.ac.ug`,
+        email,
         homeDistrictAddress: address,
         nextOfKinName: guardianName,
         nextOfKinPhone: guardianPhone,
         nextOfKinRelationship: guardianRel,
         enrollmentStatus: 'Active',
-        attendancePercentage: 95
+        attendancePercentage: 0
       };
       onUpdateStudents([...students, newStd]);
     }
@@ -189,7 +173,7 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({
     let csv = 'Reg Number,Full Name,Year of Study,Course Unit,CAT 1 (15%),CAT 2 (15%),Assignment (10%),Practical (20%),Final Exam (40%),Total (100%),Grade,Grade Point\n';
     filteredStudents.forEach((std) => {
       const m = getStudentMark(std.id);
-      csv += `"${std.regNumber}","${std.fullName}",${std.yearOfStudy},"${currentUnit?.code}",${m.cat1Score},${m.cat2Score},${m.assignmentScore},${m.practicalScore},${m.finalExamScore},${m.totalPercentage},"${m.letterGrade}",${m.gradePoint}\n`;
+      csv += [std.regNumber, std.fullName, std.yearOfStudy, currentUnit?.code || '', m.cat1Score, m.cat2Score, m.assignmentScore, m.practicalScore, m.finalExamScore, m.totalPercentage, m.letterGrade, m.gradePoint].map(csvCell).join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -198,6 +182,7 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({
     a.href = url;
     a.download = `Student_Marks_Year_${selectedYear}_${currentUnit?.code}.csv`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (

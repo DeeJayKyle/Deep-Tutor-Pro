@@ -50,7 +50,7 @@ export const LectureNotesView: React.FC<LectureNotesViewProps> = ({
   // Active unit & current note
   const currentUnit = courseUnits.find((u) => u.id === activeUnitId) || courseUnits[0];
   const unitNotes = lectureNotes.filter((n) => n.courseUnitId === currentUnit?.id);
-  const activeNote = lectureNotes.find((n) => n.id === selectedNoteId) || unitNotes[0] || lectureNotes[0];
+  const activeNote = unitNotes.find((n) => n.id === selectedNoteId) || unitNotes[0];
 
   // Editable note content state
   const [editTheoretical, setEditTheoretical] = useState(activeNote?.theoreticalContent || '');
@@ -71,7 +71,7 @@ export const LectureNotesView: React.FC<LectureNotesViewProps> = ({
       const newNote: LectureNoteBlock = {
         id: `note-${Date.now()}`,
         courseUnitId: currentUnit.id,
-        topicId: `topic-${Date.now()}`,
+        topicId: selectedTopicId || currentUnit.topics[0]?.id || '',
         contactHoursLabel: `Contact Hours ${hoursStart} - ${hoursEnd} (3 Hours)`,
         title: `Comprehensive Lecture: Drug Distribution & Plasma Protein Binding`,
         learningOutcomes: [
@@ -139,12 +139,13 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
   const handleDownloadWord = () => {
     if (!activeNote) return;
     const content = `Title: ${activeNote.title}\nContact Hours: ${activeNote.contactHoursLabel}\nUnit: ${currentUnit?.code} - ${currentUnit?.title}\n\n${activeNote.theoreticalContent}\n\nCase Studies:\n${activeNote.workedExamplesOrCases}\n\nReferences:\n${activeNote.referencesCited.map(r => r.title).join('\n')}`;
-    const blob = new Blob([content], { type: 'application/msword' });
+    const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${activeNote.title.slice(0, 30).replace(/\s+/g, '_')}_Lecture_Notes.doc`;
+    a.download = `${activeNote.title.slice(0, 30).replace(/\s+/g, '_')}_Lecture_Notes.md`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     setShowExportModal(null);
   };
 
@@ -157,6 +158,7 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
     a.href = url;
     a.download = `${activeNote.title.slice(0, 30).replace(/\s+/g, '_')}_Slides.txt`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     setShowExportModal(null);
   };
 
@@ -179,7 +181,7 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Grounded in uploaded textbooks and clinical reference guidelines. Formatted for Word, PPT, and PDF.
+              Sample notes: review and edit before teaching. Export as Markdown, slide outline text, or print to PDF.
             </p>
           </div>
         </div>
@@ -303,10 +305,10 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
                   <button
                     onClick={() => setShowExportModal('word')}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 text-xs transition-colors"
-                    title="Export as Microsoft Word Document"
+                    title="Export as Microsoft Markdown Document"
                   >
                     <FileDown className="w-3.5 h-3.5" />
-                    <span>Word (.doc)</span>
+                    <span>Markdown (.md)</span>
                   </button>
 
                   <button
@@ -315,7 +317,7 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
                     title="Export PowerPoint Slide Deck outline"
                   >
                     <Presentation className="w-3.5 h-3.5" />
-                    <span>PPT Slides</span>
+                    <span>Slide outline</span>
                   </button>
 
                   <button
@@ -465,7 +467,7 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Download className="w-4 h-4 text-blue-400" />
               <span>
-                Export: {showExportModal === 'word' ? 'Word Document (.doc)' : showExportModal === 'ppt' ? 'PowerPoint Presentation' : 'Printable PDF'}
+                Export: {showExportModal === 'word' ? 'Markdown Document (.md)' : showExportModal === 'ppt' ? 'Slide outline (.txt)' : 'Printable PDF'}
               </span>
             </h3>
 
@@ -474,7 +476,7 @@ $$\\text{Free Fraction } f_u = \\frac{C_{free}}{C_{total}}$$
                 ? 'Generates formatted academic document with syllabus headers, contact-hour breakdowns, and reference citations.'
                 : showExportModal === 'ppt'
                 ? 'Exports slide deck cards with level-2 headings and bullet points ready for clinical lecturing.'
-                : 'Opens clean print preview ready to save as PDF without interface clutter.'}
+                : 'Opens the browser print dialog to save a PDF.'}
             </p>
 
             <div className="flex justify-end gap-2 pt-2">

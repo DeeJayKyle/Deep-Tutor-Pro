@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'chat' as CapabilityType, name: 'Tutor Chat', icon: MessageSquare, badge: 'Agentic' },
     { id: 'deep_solve' as CapabilityType, name: 'Deep Solve', icon: Sparkles, badge: 'Stages' },
     { id: 'deep_question' as CapabilityType, name: 'Deep Question', icon: HelpCircle },
-    { id: 'deep_research' as CapabilityType, name: 'Deep Research', icon: Search, badge: 'Live' },
+    { id: 'deep_research' as CapabilityType, name: 'Deep Research', icon: Search, badge: 'Demo' },
     { id: 'visualize' as CapabilityType, name: 'Visualize', icon: PieChart },
     { id: 'math_animator' as CapabilityType, name: 'Math Animator', icon: Activity },
     { id: 'mastery_path' as CapabilityType, name: 'Mastery Path', icon: Compass },
@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 flex flex-col h-screen bg-[#0e1320] border-r border-[#1e293b] select-none text-slate-300">
+    <aside aria-label="Application navigation" className="w-64 shrink-0 flex flex-col h-screen bg-[#0e1320] border-r border-[#1e293b] select-none text-slate-300">
       {/* Brand Header */}
       <div className="p-4 border-b border-[#1e293b] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -208,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <FolderDown className="w-4 h-4 text-blue-400" />
             <span>EXE & APK Release Hub</span>
           </div>
-          <span className="text-[10px] text-blue-300 font-mono bg-blue-500/20 px-1.5 py-0.5 rounded">v2.0</span>
+          <span className="text-[10px] text-blue-300 font-mono bg-blue-500/20 px-1.5 py-0.5 rounded">v1.6.14</span>
         </button>
 
         <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-900/80 border border-slate-800 text-[11px]">
@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-slate-400 truncate">Model:</span>
             <span className="text-slate-200 font-mono font-medium truncate">{activeModel}</span>
           </div>
-          <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" title="Ready" />
+          <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" title="Local demo" />
         </div>
 
         <button

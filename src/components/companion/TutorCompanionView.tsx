@@ -1,3 +1,4 @@
+import { sha256 } from '../../services/files';
 import React, { useState } from 'react';
 import {
   GraduationCap,
@@ -112,43 +113,21 @@ Because $\\frac{\\partial C_t}{\\partial C_{t-1}} = f_t$, when the forget gate i
     if (!researchQuery.trim()) return;
     setIsResearching(true);
     setTimeout(() => {
-      setResearchResults([
-        {
-          id: `res-${Date.now()}-1`,
-          title: `Verified Academic Result: ${researchQuery}`,
-          authors: ['Dr. A. Turing', 'Dr. J. von Neumann'],
-          date: '2026',
-          source: 'OpenAlex Open Access Catalog',
-          url: `https://openalex.org/works?search=${encodeURIComponent(researchQuery)}`,
-          summary: `Peer-reviewed analysis investigating ${researchQuery}. Verified metadata and DOI record retrieved from international indexing authority.`,
-          provider: 'OpenAlex'
-        },
-        {
-          id: `res-${Date.now()}-2`,
-          title: `Preprint Analysis: Modern Perspectives on ${researchQuery}`,
-          authors: ['HKU DeepTutor Lab', 'AI Education Consortium'],
-          date: '2026-09',
-          source: 'arXiv Computer Science',
-          url: `https://arxiv.org/abs/2604.26962`,
-          summary: `Empirical benchmarks, formal proofs, and pedagogical implementation considerations.`,
-          provider: 'arXiv'
-        }
-      ]);
+      setResearchResults([{
+      id: crypto.randomUUID(), title: `Search arXiv for: ${researchQuery}`,
+      authors: [], date: '', source: 'External search', provider: 'arXiv',
+      url: `https://arxiv.org/search/?query=${encodeURIComponent(researchQuery)}&searchtype=all`,
+      summary: 'Open this search to inspect actual papers. No results have been retrieved or verified by this app.'
+    }]);
       setIsResearching(false);
     }, 800);
   };
 
-  const handleGenerateBackup = () => {
+  const handleGenerateBackup = async () => {
     const backup = StorageService.exportFullBackup();
     setBackupJson(backup);
-    // Simple SHA simulation for browser
-    let hash = 0;
-    for (let i = 0; i < backup.length; i++) {
-      hash = (hash << 5) - hash + backup.charCodeAt(i);
-      hash |= 0;
-    }
-    const hex = Math.abs(hash).toString(16).padStart(8, '0') + 'e49b81968f5bb83a1bad77c34828';
-    setShaHash(hex.padEnd(64, '0'));
+    try { setShaHash(await sha256(backup)); }
+    catch { setShaHash('SHA-256 unavailable in this browser context.'); }
   };
 
   return (
@@ -397,7 +376,7 @@ Because $\\frac{\\partial C_t}{\\partial C_{t-1}} = f_t$, when the forget gate i
               </button>
             </div>
             <p className="text-[11px] text-slate-400">
-              * Every result returned carries genuine verified DOI / arXiv links. No LLM hallucination in references.
+              External searches open on the source site. Example reading links are not live search results.
             </p>
           </div>
 
@@ -448,7 +427,7 @@ Because $\\frac{\\partial C_t}{\\partial C_{t-1}} = f_t$, when the forget gate i
                 <span>Local Workspace Backup & SHA-256 Verification</span>
               </h3>
               <p className="text-slate-400 text-[11px]">
-                Create tamper-proof encrypted JSON snapshots of all classes, question banks, tasks, and notes.
+                Create an unencrypted JSON backup. SHA-256 detects changes; it does not encrypt or authenticate the file.
               </p>
             </div>
             <button
@@ -464,7 +443,7 @@ Because $\\frac{\\partial C_t}{\\partial C_{t-1}} = f_t$, when the forget gate i
             <div className="space-y-3">
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 font-mono text-[11px]">
                 <span>SHA-256 Digest: {shaHash}</span>
-                <span className="text-[10px] text-slate-400">Verified</span>
+                <span className="text-[10px] text-slate-400">Digest</span>
               </div>
               <textarea
                 readOnly

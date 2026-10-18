@@ -30,47 +30,13 @@ export const KnowledgeBasesView: React.FC<KnowledgeBasesViewProps> = ({
   const [newKbEngine, setNewKbEngine] = useState<'LightRAG' | 'LlamaIndex' | 'PageIndex' | 'Obsidian'>('LightRAG');
   const [newKbDesc, setNewKbDesc] = useState('');
 
-  const [searchResults, setSearchResults] = useState<{ id: string; doc: string; chunk: number; score: number; text: string }[]>([
-    {
-      id: 'res-1',
-      doc: 'Deep_Learning_Goodfellow.pdf',
-      chunk: 412,
-      score: 0.94,
-      text: 'Section 6.5.2: The calculation of the gradient of softmax cross-entropy simplifies to y_hat - y, preventing exponential vanishing when correct class logits are moderate.'
-    },
-    {
-      id: 'res-2',
-      doc: 'Convex_Optimization_Boyd.pdf',
-      chunk: 104,
-      score: 0.82,
-      text: 'Section 3.1: Convex conjugate functions and duality bounds under Lipschitz continuous gradient assumptions.'
-    }
-  ]);
+  const [searchResults, setSearchResults] = useState<{ id: string; doc: string; chunk: number; score: number; text: string }[]>([]);
 
   const activeKb = knowledgeBases.find((k) => k.id === selectedKbId) || knowledgeBases[0];
 
   const handleTestSearch = () => {
-    if (!testQuery.trim()) return;
-    setIsSearching(true);
-    setTimeout(() => {
-      setSearchResults([
-        {
-          id: `res-${Date.now()}-1`,
-          doc: activeKb.documents[0]?.name || 'Course_Notes.pdf',
-          chunk: 88,
-          score: 0.96,
-          text: `[Retrieved via ${activeKb.engine} Hybrid Index]: Specific excerpt discussing "${testQuery}". The multi-hop graph traversed entities and verified semantic alignment with 96% cosine similarity.`
-        },
-        {
-          id: `res-${Date.now()}-2`,
-          doc: activeKb.documents[1]?.name || 'Reference.pdf',
-          chunk: 142,
-          score: 0.88,
-          text: `Corroborating citation: Mathematical boundary constraints and numerical stability guarantees under double-precision floating point.`
-        }
-      ]);
-      setIsSearching(false);
-    }, 600);
+    setSearchResults([]);
+    alert('Retrieval is not connected. No document index was searched.');
   };
 
   const handleCreateKb = (e: React.FormEvent) => {
@@ -82,19 +48,10 @@ export const KnowledgeBasesView: React.FC<KnowledgeBasesViewProps> = ({
       description: newKbDesc || 'Custom user knowledge repository',
       engine: newKbEngine,
       status: 'ready',
-      documentCount: 1,
-      chunkCount: 120,
+      documentCount: 0,
+      chunkCount: 0,
       lastUpdated: 'Just now',
-      documents: [
-        {
-          id: `doc-${Date.now()}`,
-          name: 'Getting_Started_Guide.pdf',
-          size: '1.2 MB',
-          type: 'PDF',
-          chunks: 120,
-          uploadedAt: 'Today'
-        }
-      ]
+      documents: []
     };
     onAddKB(newKB);
     setSelectedKbId(newKB.id);
@@ -175,7 +132,7 @@ export const KnowledgeBasesView: React.FC<KnowledgeBasesViewProps> = ({
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-500/30">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Ready & Indexed</span>
+                  <span>Local metadata only</span>
                 </div>
               </div>
 
@@ -184,7 +141,7 @@ export const KnowledgeBasesView: React.FC<KnowledgeBasesViewProps> = ({
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-300">Ingested Documents ({activeKb.documents.length})</span>
                   <button
-                    onClick={() => alert('Document upload parsed and indexed into vector embeddings!')}
+                    onClick={() => alert('Document indexing is not connected in this build.')}
                     className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
                   >
                     <Upload className="w-3 h-3" />

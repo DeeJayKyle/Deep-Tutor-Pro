@@ -1,0 +1,17 @@
+{
+  "name": "deep-tutor-pro-desktop",
+  "version": "1.6.14",
+  "description": "Deep Tutor Pro desktop learning workspace",
+  "author": "Deep Tutor Pro contributors",
+  "license": "Apache-2.0",
+  "main": "main.cjs",
+  "devDependencies": { "electron": "44.9.0", "electron-builder": "26.15.3" },
+  "build": {
+    "appId": "com.deejaykyle.deeptutorpro",
+    "productName": "Deep Tutor Pro",
+    "directories": { "output": "out" },
+    "files": ["main.cjs", "web/**/*", "package.json"],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "artifactName": "Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false }
+  }
+}

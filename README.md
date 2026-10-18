@@ -43,3 +43,16 @@ npm run dev
 ```
 
 The application runs on Vite on port 3000.
+
+## Current implementation and verification
+
+This checkout is a React application with local device storage. AI generation, research,
+OCR and integrations are demonstrations; no live provider/backend or automatic cloud
+sync is connected. See [the review](CODE_REVIEW.md) for repaired defects and remaining work.
+
+Use Node.js 22 and `npm ci`. Run `npm run lint`, `npm test`, and `npm run build`.
+For desktop/mobile browser checks, run `npx playwright install chromium` then
+`npm run test:e2e`. Settings supports complete JSON backup export and validated restore.
+The [v1.6.14 release](https://github.com/DeeJayKyle/Deep-Tutor-Pro/releases/tag/v1.6.14)
+contains unsigned Windows and debug-signed Android test installers. New main-branch fixes
+are not present in those older release assets until a new package is built and published.

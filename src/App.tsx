@@ -48,6 +48,7 @@ import {
 } from './types';
 
 export const App: React.FC = () => {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<CapabilityType>('curriculum');
   const [selectedUnitId, setSelectedUnitId] = useState<string | undefined>(undefined);
 
@@ -71,10 +72,17 @@ export const App: React.FC = () => {
   const [providers, setProviders] = useState<ProviderConfig[]>(() => StorageService.getProviders());
   const [selectedTools, setSelectedTools] = useState<string[]>(() => StorageService.getSelectedTools());
   const [currentWorkspace, setCurrentWorkspace] = useState<string>(() => StorageService.getCurrentWorkspace());
-  const [activeModel, setActiveModel] = useState<string>('gemini-2.5-pro');
+  const [activeModel, setActiveModel] = useState<string>('Demo — no AI connected');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReleaseHubOpen, setIsReleaseHubOpen] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
+
+  const [storageFailed, setStorageFailed] = useState(false);
+  useEffect(() => {
+    const report = () => setStorageFailed(true);
+    window.addEventListener('deeptutor-storage-error', report);
+    return () => window.removeEventListener('deeptutor-storage-error', report);
+  }, []);
 
   // Sync state to local storage for online/offline durability
   useEffect(() => { StorageService.setCurriculumPackage(curriculum); }, [curriculum]);
@@ -136,57 +144,12 @@ export const App: React.FC = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsChatLoading(true);
 
-    setTimeout(() => {
-      // Determine what tools were invoked
-      const toolInvocations: any[] = [];
-      if (selectedTools.includes('reason')) {
-        toolInvocations.push({
-          id: `tc-${Date.now()}-1`,
-          tool: 'reason',
-          status: 'completed',
-          input: `Deep reasoning analysis on inquiry: "${text.slice(0, 30)}..."`,
-          output: 'Formulated clinical rationale and cross-referenced curriculum requirements.',
-          timestamp: new Date().toLocaleTimeString()
-        });
-      }
-      if (selectedTools.includes('web_search') || selectedTools.includes('paper_search')) {
-        toolInvocations.push({
-          id: `tc-${Date.now()}-2`,
-          tool: selectedTools.includes('paper_search') ? 'paper_search' : 'web_search',
-          status: 'completed',
-          input: `Querying medical & pharmacological preprints on: "${text.slice(0, 25)}"`,
-          output: 'Found 4 peer-reviewed sources and national health standard guidelines.',
-          timestamp: new Date().toLocaleTimeString()
-        });
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant',
-        content: `### DeepTutor Response & Academic Rationale\n\nRegarding: **${text}**\n\nI have aligned this inquiry with the active course curriculum and standard pharmaceutical competency framework. All calculations and therapeutic concepts have been validated across reference pharmacopoeias.\n\n- **Curriculum Alignment**: Verifiable under standard tertiary diploma & certificate pharmacy competencies.\n- **Learning Outcome**: Reinforces quantitative pharmacology, clinical compounding accuracy, and diagnostic patient counseling.\n\n*Feel free to request step-by-step problem derivations, generate related exam MCQs, or formulate comprehensive lecture slides.*`,
-        thinking: `Agentic execution loop:\n1. Checked active workspace curriculum: ${curriculum ? curriculum.title : 'General Academic Workspace'}\n2. Evaluated active tools: ${selectedTools.join(', ')}\n3. Generated grounded pedagogical response with step-by-step clarity.`,
-        toolCalls: toolInvocations.length > 0 ? toolInvocations : undefined,
-        capability: activeTab,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sources: [
-          {
-            id: 'src-curriculum-1',
-            title: curriculum?.title || 'National Pharmacy Curriculum Guide',
-            url: '#curriculum',
-            provider: 'Curriculum Specification'
-          },
-          {
-            id: 'src-ref-1',
-            title: 'British Pharmacopoeia & Goodman and Gilman Clinical Pharmacology',
-            url: '#references',
-            provider: 'Reference Library'
-          }
-        ]
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-      setIsChatLoading(false);
-    }, 1200);
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(), role: 'assistant',
+      content: 'No AI provider is connected in this build. Your message has been saved locally. The example tools show sample content and do not perform live research, clinical validation, or model inference.',
+      capability: activeTab, timestamp: new Date().toLocaleTimeString()
+    }]);
+    setIsChatLoading(false);
   };
 
   const handleExportSession = () => {
@@ -199,6 +162,7 @@ export const App: React.FC = () => {
     a.href = url;
     a.download = `deeptutor_session_${Date.now()}.md`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleClearSession = () => {
@@ -213,18 +177,23 @@ export const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#090d16] font-sans text-slate-100">
       {/* Sidebar Navigation */}
+      <div className={`${menuOpen ? "block" : "hidden"} md:block fixed md:static inset-y-0 left-0 z-40`}>
       <Sidebar
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
+          setMenuOpen(false);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenReleaseHub={() => setIsReleaseHubOpen(true)}
         activeModel={activeModel}
       />
 
+      </div>
+      {menuOpen && <button aria-label="Close navigation" className="md:hidden fixed inset-0 bg-black/60 z-30" onClick={() => setMenuOpen(false)} />}
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+        <button className="md:hidden text-left p-3 bg-slate-800" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰ Menu</button>
         <Header
           activeTab={activeTab}
           selectedTools={selectedTools}
@@ -235,6 +204,10 @@ export const App: React.FC = () => {
           onClearSession={activeTab === 'chat' ? handleClearSession : undefined}
         />
 
+        <div role="status" className="px-4 py-2 text-xs bg-amber-950 text-amber-200">
+          Local workspace · AI, research, OCR and generated teaching content are demonstrations. No live provider or cloud sync is connected.
+        </div>
+        {storageFailed && <div role="alert" className="p-3 bg-red-950 text-red-200">Changes could not be saved to this device. Export a backup before closing the app.</div>}
         {/* View Routing */}
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* 1. Institutional Curriculum & Course Units */}

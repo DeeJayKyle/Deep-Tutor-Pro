@@ -1,3 +1,4 @@
+import { readSourceText } from '../../services/files';
 import React, { useState } from 'react';
 import {
   Upload,
@@ -35,6 +36,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
   const [newCategory, setNewCategory] = useState<'textbook' | 'clinical_guideline' | 'pharmacopoeia' | 'exam_standard' | 'image_diagram'>('textbook');
   const [newFormat, setNewFormat] = useState('PDF');
   const [selectedUnitCode, setSelectedUnitCode] = useState(courseUnits[0]?.code || 'PHA 1101');
+  const [actualSize, setActualSize] = useState('Manual text');
   const [extractedSnippet, setExtractedSnippet] = useState('');
 
   const activeDoc = referenceDocs.find((d) => d.id === selectedDocId) || referenceDocs[0];
@@ -44,19 +46,17 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
     d.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+    try {
+      const text = await readSourceText(file);
       setNewDocName(file.name);
-      const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
-      setNewFormat(ext);
-      if (['PNG', 'JPG', 'JPEG', 'WEBP'].includes(ext)) {
-        setNewCategory('image_diagram');
-        setExtractedSnippet(`[Image OCR Extraction]: Chemical structure / biological flow diagram from ${file.name}. Recognized drug formula and pathway kinetics.`);
-      } else {
-        setExtractedSnippet(`[Document Ingestion]: Extracted chapters and reference excerpts from ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB). Verified pharmacological terminology.`);
-      }
-    }
+      setNewFormat(file.name.split('.').pop()?.toUpperCase() || 'TXT');
+      setExtractedSnippet(text);
+      setActualSize(`${(file.size / 1024).toFixed(1)} KB`);
+    } catch (error) { alert(error instanceof Error ? error.message : 'Could not read file.'); }
+    e.target.value = '';
   };
 
   const handleSaveDoc = (e: React.FormEvent) => {
@@ -68,8 +68,8 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
       name: newDocName,
       category: newCategory,
       fileFormat: newFormat,
-      fileSize: '4.8 MB',
-      extractedText: extractedSnippet || 'Extracted clinical definitions, dosing tables, and chemical structures ready for lecture note generation.',
+      fileSize: actualSize,
+      extractedText: extractedSnippet,
       attachedUnitCodes: [selectedUnitCode],
       uploadedAt: new Date().toISOString().slice(0, 10)
     };

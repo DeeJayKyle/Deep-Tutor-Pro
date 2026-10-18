@@ -1,0 +1,6 @@
+{
+  "name": "DeepTutor",
+  "description": "Agent-native intelligent learning companion featuring interactive capabilities, multi-stage tutor reasoning, study notebook, mastery path, visual learning, and knowledge bases.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

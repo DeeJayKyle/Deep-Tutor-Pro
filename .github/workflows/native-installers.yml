@@ -1,0 +1,205 @@
+name: Build Deep Tutor Pro installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-installers.yml'
+      - 'packaging/**'
+      - 'scripts/prepare-native.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-installers-v1.6.14
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare native build sources
+        shell: bash
+        run: |
+          python3 - <<'PYSETUP'
+          import json
+          from pathlib import Path
+          files = json.loads('{"packaging/windows/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-desktop\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"description\\": \\"Deep Tutor Pro desktop learning workspace\\",\\n  \\"author\\": \\"Deep Tutor Pro contributors\\",\\n  \\"license\\": \\"Apache-2.0\\",\\n  \\"main\\": \\"main.cjs\\",\\n  \\"devDependencies\\": { \\"electron\\": \\"44.9.0\\", \\"electron-builder\\": \\"26.15.3\\" },\\n  \\"build\\": {\\n    \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n    \\"productName\\": \\"Deep Tutor Pro\\",\\n    \\"directories\\": { \\"output\\": \\"out\\" },\\n    \\"files\\": [\\"main.cjs\\", \\"web/**/*\\", \\"package.json\\"],\\n    \\"win\\": { \\"target\\": [{ \\"target\\": \\"nsis\\", \\"arch\\": [\\"x64\\"] }], \\"artifactName\\": \\"Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}\\" },\\n    \\"nsis\\": { \\"oneClick\\": false, \\"perMachine\\": false, \\"allowToChangeInstallationDirectory\\": true, \\"deleteAppDataOnUninstall\\": false }\\n  }\\n}\\n", "packaging/windows/main.cjs": "const { app, BrowserWindow, shell } = require(\'electron\');\\nconst path = require(\'node:path\');\\nconst { pathToFileURL } = require(\'node:url\');\\nconst startFile = path.join(__dirname, \'web\', \'index.html\');\\nconst startUrl = pathToFileURL(startFile).href;\\nfunction openExternal(url) {\\n  try {\\n    const parsed = new URL(url);\\n    if (parsed.protocol === \'https:\' || parsed.protocol === \'http:\') void shell.openExternal(url);\\n  } catch { /* Ignore malformed external links. */ }\\n}\\nfunction createWindow() {\\n  const win = new BrowserWindow({\\n    width: 1440, height: 960, minWidth: 400, minHeight: 600,\\n    backgroundColor: \'#090d16\', autoHideMenuBar: true,\\n    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }\\n  });\\n  win.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: \'deny\' }; });\\n  win.webContents.on(\'will-navigate\', (event, url) => {\\n    if (url !== startUrl && !url.startsWith(startUrl + \'#\')) { event.preventDefault(); openExternal(url); }\\n  });\\n  win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));\\n  void win.loadFile(startFile);\\n}\\napp.whenReady().then(() => {\\n  createWindow();\\n  app.on(\'activate\', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });\\n});\\napp.on(\'window-all-closed\', () => { if (process.platform !== \'darwin\') app.quit(); });\\n", "packaging/android/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-android\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"private\\": true,\\n  \\"dependencies\\": { \\"@capacitor/core\\": \\"8.5.3\\", \\"@capacitor/android\\": \\"8.5.3\\" },\\n  \\"devDependencies\\": { \\"@capacitor/cli\\": \\"8.5.3\\" }\\n}\\n", "packaging/android/capacitor.config.json": "{\\n  \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n  \\"appName\\": \\"Deep Tutor Pro\\",\\n  \\"webDir\\": \\"web\\"\\n}\\n", "scripts/prepare-native.mjs": "import { cpSync, existsSync, mkdirSync, rmSync } from \'node:fs\';\\nimport { fileURLToPath } from \'node:url\';\\nimport path from \'node:path\';\\nconst root = fileURLToPath(new URL(\'../\', import.meta.url));\\nif (!existsSync(path.join(root, \'dist/index.html\'))) throw new Error(\'Run npm run build first.\');\\nfor (const platform of [\'windows\', \'android\']) {\\n  const target = path.join(root, \'packaging\', platform, \'web\');\\n  rmSync(target, { recursive: true, force: true });\\n  mkdirSync(target, { recursive: true });\\n  cpSync(path.join(root, \'dist\'), target, { recursive: true });\\n}\\n", "src/initial/workspaceDefaults.ts": "import type { ChatMessage, TaskItem, QuestionItem, MemoryTrace, KnowledgeBase, AcademicClass, TeachingDraft, PartnerAgent, ProviderConfig } from \'../types\';\\n\\n// Fresh installs start with an empty personal workspace. Existing saved data is preserved.\\nexport const INITIAL_MESSAGES: ChatMessage[] = [];\\nexport const INITIAL_TASKS: TaskItem[] = [];\\nexport const INITIAL_QUESTIONS: QuestionItem[] = [];\\nexport const INITIAL_MEMORY_TRACES: MemoryTrace[] = [];\\nexport const INITIAL_KNOWLEDGE_BASES: KnowledgeBase[] = [];\\nexport const INITIAL_CLASSES: AcademicClass[] = [];\\nexport const INITIAL_DRAFTS: TeachingDraft[] = [];\\nexport const INITIAL_PARTNERS: PartnerAgent[] = [];\\nexport const DEFAULT_PROVIDERS: ProviderConfig[] = [];\\n"}')
+          for name, content in files.items():
+              p = Path(name)
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(content)
+          p = Path('src/services/storage.ts')
+          p.write_text(p.read_text().replace('../data/mockData', '../initial/workspaceDefaults'))
+          p = Path('vite.config.ts')
+          s = p.read_text()
+          if "base: './'" not in s:
+              p.write_text(s.replace('plugins: [', "base: './',\n  plugins: ["))
+          PYSETUP
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm run build
+      - run: node scripts/prepare-native.mjs
+      - run: npm install
+        working-directory: packaging/windows
+      - name: Build Windows x64 installer
+        run: npx electron-builder --win nsis --x64 --publish never
+        working-directory: packaging/windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify Windows executable format
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem packaging/windows/out/*Setup.exe
+          if ($files.Count -ne 1) { throw 'Expected exactly one installer' }
+          $bytes = [IO.File]::ReadAllBytes($files[0].FullName)
+          if ($bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Not a Windows executable' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: packaging/windows/out/*Setup.exe
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare native build sources
+        shell: bash
+        run: |
+          python3 - <<'PYSETUP'
+          import json
+          from pathlib import Path
+          files = json.loads('{"packaging/windows/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-desktop\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"description\\": \\"Deep Tutor Pro desktop learning workspace\\",\\n  \\"author\\": \\"Deep Tutor Pro contributors\\",\\n  \\"license\\": \\"Apache-2.0\\",\\n  \\"main\\": \\"main.cjs\\",\\n  \\"devDependencies\\": { \\"electron\\": \\"44.9.0\\", \\"electron-builder\\": \\"26.15.3\\" },\\n  \\"build\\": {\\n    \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n    \\"productName\\": \\"Deep Tutor Pro\\",\\n    \\"directories\\": { \\"output\\": \\"out\\" },\\n    \\"files\\": [\\"main.cjs\\", \\"web/**/*\\", \\"package.json\\"],\\n    \\"win\\": { \\"target\\": [{ \\"target\\": \\"nsis\\", \\"arch\\": [\\"x64\\"] }], \\"artifactName\\": \\"Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}\\" },\\n    \\"nsis\\": { \\"oneClick\\": false, \\"perMachine\\": false, \\"allowToChangeInstallationDirectory\\": true, \\"deleteAppDataOnUninstall\\": false }\\n  }\\n}\\n", "packaging/windows/main.cjs": "const { app, BrowserWindow, shell } = require(\'electron\');\\nconst path = require(\'node:path\');\\nconst { pathToFileURL } = require(\'node:url\');\\nconst startFile = path.join(__dirname, \'web\', \'index.html\');\\nconst startUrl = pathToFileURL(startFile).href;\\nfunction openExternal(url) {\\n  try {\\n    const parsed = new URL(url);\\n    if (parsed.protocol === \'https:\' || parsed.protocol === \'http:\') void shell.openExternal(url);\\n  } catch { /* Ignore malformed external links. */ }\\n}\\nfunction createWindow() {\\n  const win = new BrowserWindow({\\n    width: 1440, height: 960, minWidth: 400, minHeight: 600,\\n    backgroundColor: \'#090d16\', autoHideMenuBar: true,\\n    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }\\n  });\\n  win.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: \'deny\' }; });\\n  win.webContents.on(\'will-navigate\', (event, url) => {\\n    if (url !== startUrl && !url.startsWith(startUrl + \'#\')) { event.preventDefault(); openExternal(url); }\\n  });\\n  win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));\\n  void win.loadFile(startFile);\\n}\\napp.whenReady().then(() => {\\n  createWindow();\\n  app.on(\'activate\', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });\\n});\\napp.on(\'window-all-closed\', () => { if (process.platform !== \'darwin\') app.quit(); });\\n", "packaging/android/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-android\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"private\\": true,\\n  \\"dependencies\\": { \\"@capacitor/core\\": \\"8.5.3\\", \\"@capacitor/android\\": \\"8.5.3\\" },\\n  \\"devDependencies\\": { \\"@capacitor/cli\\": \\"8.5.3\\" }\\n}\\n", "packaging/android/capacitor.config.json": "{\\n  \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n  \\"appName\\": \\"Deep Tutor Pro\\",\\n  \\"webDir\\": \\"web\\"\\n}\\n", "scripts/prepare-native.mjs": "import { cpSync, existsSync, mkdirSync, rmSync } from \'node:fs\';\\nimport { fileURLToPath } from \'node:url\';\\nimport path from \'node:path\';\\nconst root = fileURLToPath(new URL(\'../\', import.meta.url));\\nif (!existsSync(path.join(root, \'dist/index.html\'))) throw new Error(\'Run npm run build first.\');\\nfor (const platform of [\'windows\', \'android\']) {\\n  const target = path.join(root, \'packaging\', platform, \'web\');\\n  rmSync(target, { recursive: true, force: true });\\n  mkdirSync(target, { recursive: true });\\n  cpSync(path.join(root, \'dist\'), target, { recursive: true });\\n}\\n", "src/initial/workspaceDefaults.ts": "import type { ChatMessage, TaskItem, QuestionItem, MemoryTrace, KnowledgeBase, AcademicClass, TeachingDraft, PartnerAgent, ProviderConfig } from \'../types\';\\n\\n// Fresh installs start with an empty personal workspace. Existing saved data is preserved.\\nexport const INITIAL_MESSAGES: ChatMessage[] = [];\\nexport const INITIAL_TASKS: TaskItem[] = [];\\nexport const INITIAL_QUESTIONS: QuestionItem[] = [];\\nexport const INITIAL_MEMORY_TRACES: MemoryTrace[] = [];\\nexport const INITIAL_KNOWLEDGE_BASES: KnowledgeBase[] = [];\\nexport const INITIAL_CLASSES: AcademicClass[] = [];\\nexport const INITIAL_DRAFTS: TeachingDraft[] = [];\\nexport const INITIAL_PARTNERS: PartnerAgent[] = [];\\nexport const DEFAULT_PROVIDERS: ProviderConfig[] = [];\\n"}')
+          for name, content in files.items():
+              p = Path(name)
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(content)
+          p = Path('src/services/storage.ts')
+          p.write_text(p.read_text().replace('../data/mockData', '../initial/workspaceDefaults'))
+          p = Path('vite.config.ts')
+          s = p.read_text()
+          if "base: './'" not in s:
+              p.write_text(s.replace('plugins: [', "base: './',\n  plugins: ["))
+          PYSETUP
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm install
+      - run: npm run build
+      - run: node scripts/prepare-native.mjs
+      - run: npm install
+        working-directory: packaging/android
+      - run: npx cap add android
+        working-directory: packaging/android
+      - name: Set Android version
+        working-directory: packaging/android
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle')
+          s = p.read_text().replace('versionCode 1', 'versionCode 10614').replace('versionName "1.0"', 'versionName "1.6.14"')
+          p.write_text(s)
+          PY
+      - name: Build installable test APK
+        working-directory: packaging/android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+      - name: Verify APK signature and package identity
+        run: |
+          apk=packaging/android/android/app/build/outputs/apk/debug/app-debug.apk
+          tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/aapt" dump badging "$apk" | grep "package: name='com.deejaykyle.deeptutorpro' versionCode='10614' versionName='1.6.14'"
+          mkdir -p native-assets
+          cp "$apk" native-assets/Deep-Tutor-Pro-1.6.14-Android-test.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-installer
+          path: native-assets/*.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare native build sources
+        shell: bash
+        run: |
+          python3 - <<'PYSETUP'
+          import json
+          from pathlib import Path
+          files = json.loads('{"packaging/windows/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-desktop\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"description\\": \\"Deep Tutor Pro desktop learning workspace\\",\\n  \\"author\\": \\"Deep Tutor Pro contributors\\",\\n  \\"license\\": \\"Apache-2.0\\",\\n  \\"main\\": \\"main.cjs\\",\\n  \\"devDependencies\\": { \\"electron\\": \\"44.9.0\\", \\"electron-builder\\": \\"26.15.3\\" },\\n  \\"build\\": {\\n    \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n    \\"productName\\": \\"Deep Tutor Pro\\",\\n    \\"directories\\": { \\"output\\": \\"out\\" },\\n    \\"files\\": [\\"main.cjs\\", \\"web/**/*\\", \\"package.json\\"],\\n    \\"win\\": { \\"target\\": [{ \\"target\\": \\"nsis\\", \\"arch\\": [\\"x64\\"] }], \\"artifactName\\": \\"Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}\\" },\\n    \\"nsis\\": { \\"oneClick\\": false, \\"perMachine\\": false, \\"allowToChangeInstallationDirectory\\": true, \\"deleteAppDataOnUninstall\\": false }\\n  }\\n}\\n", "packaging/windows/main.cjs": "const { app, BrowserWindow, shell } = require(\'electron\');\\nconst path = require(\'node:path\');\\nconst { pathToFileURL } = require(\'node:url\');\\nconst startFile = path.join(__dirname, \'web\', \'index.html\');\\nconst startUrl = pathToFileURL(startFile).href;\\nfunction openExternal(url) {\\n  try {\\n    const parsed = new URL(url);\\n    if (parsed.protocol === \'https:\' || parsed.protocol === \'http:\') void shell.openExternal(url);\\n  } catch { /* Ignore malformed external links. */ }\\n}\\nfunction createWindow() {\\n  const win = new BrowserWindow({\\n    width: 1440, height: 960, minWidth: 400, minHeight: 600,\\n    backgroundColor: \'#090d16\', autoHideMenuBar: true,\\n    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }\\n  });\\n  win.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: \'deny\' }; });\\n  win.webContents.on(\'will-navigate\', (event, url) => {\\n    if (url !== startUrl && !url.startsWith(startUrl + \'#\')) { event.preventDefault(); openExternal(url); }\\n  });\\n  win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));\\n  void win.loadFile(startFile);\\n}\\napp.whenReady().then(() => {\\n  createWindow();\\n  app.on(\'activate\', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });\\n});\\napp.on(\'window-all-closed\', () => { if (process.platform !== \'darwin\') app.quit(); });\\n", "packaging/android/package.json": "{\\n  \\"name\\": \\"deep-tutor-pro-android\\",\\n  \\"version\\": \\"1.6.14\\",\\n  \\"private\\": true,\\n  \\"dependencies\\": { \\"@capacitor/core\\": \\"8.5.3\\", \\"@capacitor/android\\": \\"8.5.3\\" },\\n  \\"devDependencies\\": { \\"@capacitor/cli\\": \\"8.5.3\\" }\\n}\\n", "packaging/android/capacitor.config.json": "{\\n  \\"appId\\": \\"com.deejaykyle.deeptutorpro\\",\\n  \\"appName\\": \\"Deep Tutor Pro\\",\\n  \\"webDir\\": \\"web\\"\\n}\\n", "scripts/prepare-native.mjs": "import { cpSync, existsSync, mkdirSync, rmSync } from \'node:fs\';\\nimport { fileURLToPath } from \'node:url\';\\nimport path from \'node:path\';\\nconst root = fileURLToPath(new URL(\'../\', import.meta.url));\\nif (!existsSync(path.join(root, \'dist/index.html\'))) throw new Error(\'Run npm run build first.\');\\nfor (const platform of [\'windows\', \'android\']) {\\n  const target = path.join(root, \'packaging\', platform, \'web\');\\n  rmSync(target, { recursive: true, force: true });\\n  mkdirSync(target, { recursive: true });\\n  cpSync(path.join(root, \'dist\'), target, { recursive: true });\\n}\\n", "src/initial/workspaceDefaults.ts": "import type { ChatMessage, TaskItem, QuestionItem, MemoryTrace, KnowledgeBase, AcademicClass, TeachingDraft, PartnerAgent, ProviderConfig } from \'../types\';\\n\\n// Fresh installs start with an empty personal workspace. Existing saved data is preserved.\\nexport const INITIAL_MESSAGES: ChatMessage[] = [];\\nexport const INITIAL_TASKS: TaskItem[] = [];\\nexport const INITIAL_QUESTIONS: QuestionItem[] = [];\\nexport const INITIAL_MEMORY_TRACES: MemoryTrace[] = [];\\nexport const INITIAL_KNOWLEDGE_BASES: KnowledgeBase[] = [];\\nexport const INITIAL_CLASSES: AcademicClass[] = [];\\nexport const INITIAL_DRAFTS: TeachingDraft[] = [];\\nexport const INITIAL_PARTNERS: PartnerAgent[] = [];\\nexport const DEFAULT_PROVIDERS: ProviderConfig[] = [];\\n"}')
+          for name, content in files.items():
+              p = Path(name)
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(content)
+          p = Path('src/services/storage.ts')
+          p.write_text(p.read_text().replace('../data/mockData', '../initial/workspaceDefaults'))
+          p = Path('vite.config.ts')
+          s = p.read_text()
+          if "base: './'" not in s:
+              p.write_text(s.replace('plugins: [', "base: './',\n  plugins: ["))
+          PYSETUP
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-installer'
+          path: native-assets
+          merge-multiple: true
+      - name: Attach installers and checksums to v1.6.14
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-source"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/native-source"
+          cp --parents src/services/storage.ts src/initial/workspaceDefaults.ts vite.config.ts scripts/prepare-native.mjs packaging/windows/package.json packaging/windows/main.cjs packaging/android/package.json packaging/android/capacitor.config.json "$RUNNER_TEMP/native-source"
+          (cd "$RUNNER_TEMP/native-source" && zip -qr "$GITHUB_WORKSPACE/native-assets/Deep-Tutor-Pro-1.6.14-Native-Source.zip" .)
+          (cd native-assets && sha256sum *.exe *.apk *.zip > SHA256SUMS.txt)
+          gh release view v1.6.14 --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'release-notes.md'
+          s = p.read_text().split('<!-- native-installers -->')[0]
+          marker = '### Release status'
+          if marker in s:
+              s = s.split(marker)[0]
+          s += '''<!-- native-installers -->
+          ### Windows and Android downloads
+          - **Windows:** `Deep-Tutor-Pro-1.6.14-Windows-x64-Setup.exe` — unsigned x64 installer. Windows may show an unknown-publisher notice.
+          - **Android:** `Deep-Tutor-Pro-1.6.14-Android-test.apk` — installable debug-signed test build, not a Play Store production release. A future build signed with another key requires uninstalling this build first; export local data before doing so.
+          - `SHA256SUMS.txt` contains checksums for both installers and the native source archive.
+          
+          Both packages bundle the React interface locally. Packaging does not add missing AI services or cloud synchronization. TypeScript and production web builds passed; the native packages were built and format/signature checked in CI, but have not been tested on a physical Windows or Android device.
+          
+          ### Source provenance
+          The original v1.6.14 tag is unchanged. Installers are built from the commit below using the native build recipe, which restores missing workspace defaults and uses relative web asset paths during CI. The matching source is included in `Deep-Tutor-Pro-1.6.14-Native-Source.zip`.
+          '''
+          s += '\nBuild commit: `' + os.environ['GITHUB_SHA'] + '`\n'
+          p.write_text(s)
+          PY
+          gh release upload v1.6.14 native-assets/* --clobber
+          gh release edit v1.6.14 --notes-file "$RUNNER_TEMP/release-notes.md"
+          echo 'Installers attached to https://github.com/DeeJayKyle/Deep-Tutor-Pro/releases/tag/v1.6.14' >> "$GITHUB_STEP_SUMMARY"

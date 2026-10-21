@@ -24,6 +24,7 @@ import { loadWorkspace, onSessionChanged, runSync, store, useSaveError, useSyncS
 import { adoptCookieSession, getSession, loadSession, onSession } from './lib/api';
 import { Button, Spinner, UiProvider, cx } from './ui/kit';
 import { ConflictDialog } from './views/ConflictDialog';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { cancelJob, dismissJob, useJobs } from './state/jobs';
 
 const HomeView = lazy(() => import('./views/Home'));
@@ -193,7 +194,9 @@ function Shell() {
   const active = '/' + (route.parts[0] ?? '');
   const isActive = (to: string) => (to === '/' ? active === '/' : active === to || (to === '/units' && active === '/classes') || (to === '/curriculum' && active === '/programmes'));
 
-  useEffect(() => setMenu(false), [route.path]);
+  useEffect(() => {
+    setMenu(false);
+  }, [route.path]);
 
   // Theme
   useEffect(() => {
@@ -269,7 +272,9 @@ function Shell() {
         </header>
         {saveError && <div className="no-print border-b border-bad/40 bg-bad/10 px-4 py-2 text-sm text-bad">{saveError}</div>}
         <main className="flex-1 overflow-y-auto pb-20 lg:pb-0" id="main">
-          <Suspense fallback={<div className="p-8"><Spinner label="Loading…" /></div>}>{routeView(route.parts[0])}</Suspense>
+          <ErrorBoundary resetKey={route.path}>
+            <Suspense fallback={<div className="p-8"><Spinner label="Loading…" /></div>}>{routeView(route.parts[0])}</Suspense>
+          </ErrorBoundary>
         </main>
         <nav aria-label="Quick" className="no-print fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-panel lg:hidden">
           {NAV.filter((n) => MOBILE_NAV.includes(n.to)).map((item) => {

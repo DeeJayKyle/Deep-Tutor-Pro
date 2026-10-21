@@ -54,7 +54,9 @@ function AgentChat({ kind }: { kind: 'tutor' | 'research' }) {
       .then(setKbs)
       .catch(() => setKbs([]));
   }, []);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: 'smooth' }), [chat?.messages.length, events?.length]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat?.messages.length, events?.length]);
 
   const send = async () => {
     const body = text.trim();

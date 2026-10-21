@@ -4,6 +4,18 @@ import { installFakeServer, signIn } from './fake-server';
 
 const fixture = (name: string) => new URL(`./fixtures/${name}`, import.meta.url).pathname;
 
+// Newer Chromium returns a Promise from scrollIntoView(); emulate it everywhere so
+// code that leaks such return values (e.g. from an effect) fails on any browser.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (...args: Parameters<typeof original>) {
+      original.apply(this, args);
+      return Promise.resolve() as unknown as void;
+    };
+  });
+});
+
 const SCREENS: [string, RegExp][] = [
   ['/', /Welcome/],
   ['/curriculum', /Curriculum/],

@@ -89,7 +89,9 @@ function NoteEditor({ id }: { id: string }) {
   const [instruction, setInstruction] = useState('');
   const [undo, setUndo] = useState<string | null>(null);
 
-  useEffect(() => setDraft(note?.markdown ?? ''), [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setDraft(note?.markdown ?? '');
+  }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Save edits shortly after typing stops.
   useEffect(() => {
     if (!note || draft === note.markdown) return;

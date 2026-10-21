@@ -45,7 +45,9 @@ export default function SolveView() {
   const bottom = useRef<HTMLDivElement>(null);
   const unit = ws.units.find((u) => u.id === unitId);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: 'smooth' }), [chat?.messages.length, busy]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat?.messages.length, busy]);
   useEffect(() => {
     if (!recorder) return;
     setSeconds(0);

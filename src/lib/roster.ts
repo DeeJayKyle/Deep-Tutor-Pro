@@ -38,7 +38,9 @@ export function parseCsv(text: string): string[][] {
 
 export function toCsv(rows: (string | number | null | undefined)[][]): string {
   return rows.map((r) => r.map((c) => {
-    const s = c === null || c === undefined ? '' : String(c);
+    let s = c === null || c === undefined ? '' : String(c);
+    // Neutralise spreadsheet formulas in user text (CSV injection).
+    if (typeof c === 'string' && /^\s*[=+\-@]/.test(s)) s = `'${s}`;
     return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\r\n');
 }

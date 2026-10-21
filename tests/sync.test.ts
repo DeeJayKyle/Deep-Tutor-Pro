@@ -3,9 +3,10 @@ import { webcrypto } from 'node:crypto';
 
 const store = new Map<string, unknown>();
 vi.mock('../src/lib/db', () => ({
-  dbGet: vi.fn(async (k: string) => store.get(k)),
+  // Sync state is stored per server/account (sync-state:<server>|<user>); the tests use one account.
+  dbGet: vi.fn(async (k: string) => store.get(k.startsWith('sync-state') ? 'sync-state' : k)),
   dbSet: vi.fn(async (k: string, v: unknown) => {
-    store.set(k, v);
+    store.set(k.startsWith('sync-state') ? 'sync-state' : k, v);
   }),
 }));
 
@@ -110,7 +111,7 @@ describe('mergeWorkspaces', () => {
   });
 
   it('takes remote settings when the remote copy is newer', () => {
-    const merged = mergeWorkspaces(ws({ settings: { institution: 'L' } }), ws({ updatedAt: D2, settings: { institution: 'R' } }));
+    const merged = mergeWorkspaces(ws({ settings: { institution: 'L', updatedAt: D1 } }), ws({ settings: { institution: 'R', updatedAt: D2 } }));
     expect(merged.settings.institution).toBe('R');
   });
 });

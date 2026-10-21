@@ -1,3 +1,4 @@
+import { unitResult } from '../src/lib/grading';
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_FORMATS,
@@ -295,25 +296,29 @@ describe('migrateLegacy', () => {
 
   it('does not import the 1.x demo pharmacy sample', () => {
     const read = storage({
-      deeptutor_curriculum_package_v2: { ...legacyPkg, id: 'curr-pharm-01', title: 'Diploma in Pharmacy (demo)' },
-      deeptutor_students_biodata_v2: legacyStudents,
-      deeptutor_student_marks_v2: legacyMarks,
-      deeptutor_lecture_notes_v2: [{ id: 'n1', title: 'Demo note', courseUnitId: 'cu1' }],
-      deeptutor_reference_docs_v2: [{ id: 'ref-demo-1', name: 'Demo.pdf', extractedText: 'demo' }],
+      deeptutor_curriculum_package_v2: { ...legacyPkg, id: 'curr-pharm-01', title: 'Diploma in Pharmacy (demo)', courseUnits: [{ id: 'unit-pha-101', code: 'PHA 1101', title: 'Pharmacology', yearOfStudy: 1 }] },
+      deeptutor_students_biodata_v2: [{ id: 'std-01', fullName: 'Demo Student', regNumber: 'DIP/1' }],
+      deeptutor_student_marks_v2: [{ id: 'mark-01', studentId: 'std-01', courseUnitId: 'unit-pha-101', cat1Score: 12 }],
+      deeptutor_lecture_notes_v2: [{ id: 'note-1', title: 'Demo note', courseUnitId: 'unit-pha-101' }],
+      deeptutor_reference_docs_v2: [{ id: 'ref-1', name: 'Goodman_and_Gilman.pdf', extractedText: 'demo' }],
     });
     expect(migrateLegacy(read)).toBeNull();
   });
 
-  it('keeps real uploads that sit next to the demo sample', () => {
+  it('keeps real data that sits next to the demo sample', () => {
     const read = storage({
-      deeptutor_curriculum_package_v2: { ...legacyPkg, id: 'curr-pharm-01' },
-      deeptutor_reference_docs_v2: [{ id: 'ref-demo-1', name: 'Demo.pdf' }, { id: 'ref-77', name: 'Mine.pdf', extractedText: 'my text', uploadedAt: T }],
+      deeptutor_curriculum_package_v2: { ...legacyPkg, id: 'curr-pharm-01', courseUnits: [{ id: 'unit-pha-101', code: 'PHA 1101', title: 'Pharmacology', yearOfStudy: 1 }] },
+      deeptutor_students_biodata_v2: [{ id: 'std-01', fullName: 'Demo Student' }, { id: 'std-1729000000000', fullName: 'Real Student', classCohort: 'Year 1 2026', yearOfStudy: 1 }],
+      deeptutor_student_marks_v2: [{ id: 'mark-std-1729000000000-unit-pha-101', studentId: 'std-1729000000000', courseUnitId: 'unit-pha-101', cat1Score: 12, finalExamScore: 34 }],
+      deeptutor_reference_docs_v2: [{ id: 'ref-2', name: 'Demo.pdf' }, { id: 'ref-1729000000077', name: 'Mine.pdf', extractedText: 'my text', uploadedAt: T }],
     });
     const ws = migrateLegacy(read)!;
     expect(ws.programmes).toEqual([]);
     expect(ws.units).toEqual([]);
+    expect(ws.students.map((s) => s.firstName)).toEqual(['Real']);
+    expect(ws.marks.map((m) => [m.componentId, m.score])).toEqual([['cat1', 12], ['exam', 34]]);
     expect(ws.references).toHaveLength(1);
-    expect(ws.references[0]).toMatchObject({ id: 'ref-77', name: 'Mine.pdf', text: 'my text', addedAt: T });
+    expect(ws.references[0]).toMatchObject({ id: 'ref-1729000000077', name: 'Mine.pdf', text: 'my text', addedAt: T });
   });
 
   it('converts real 1.x data: programme, units, topics, classes, students and marks', () => {
@@ -348,14 +353,22 @@ describe('migrateLegacy', () => {
     expect(peter).toMatchObject({ firstName: 'Peter', lastName: '', classId: jane.classId });
     expect(ws.students.find((s) => s.id === 'st3')!.classId).toBe(ws.classes.find((c) => c.name === 'Year 2')!.id);
 
-    // 1.x stored raw marks (CAT out of 15, assignment out of 10); 2.x stores percentages.
+    // 1.x raw marks are kept on the 1.x scale (CAT /15, assignment /10, practical /20,
+    // exam /40) with the 1.x components and bands, so finals and grades do not change.
     const m = (sid: string, comp: string) => ws.marks.find((x) => x.studentId === sid && x.componentId === comp)?.score;
-    expect(m('st1', 'cat1')).toBe(80);
-    expect(m('st1', 'cat2')).toBe(50);
-    expect(m('st1', 'assign')).toBe(100);
+    expect(m('st1', 'cat1')).toBe(12);
+    expect(m('st1', 'cat2')).toBe(7.5);
+    expect(m('st1', 'assign')).toBe(10);
     expect(m('st1', 'exam')).toBe(64);
-    expect(m('st2', 'cat1')).toBe(100);
+    expect(m('st2', 'cat1')).toBe(15);
     expect(m('st2', 'exam')).toBeUndefined();
+    expect(ws.settings.components.map((c) => [c.id, c.maxScore, c.weight])).toEqual([
+      ['cat1', 15, 15],
+      ['cat2', 15, 15],
+      ['assign', 10, 10],
+      ['prac', 20, 20],
+      ['exam', 40, 40],
+    ]);
     expect(ws.marks.filter((x) => x.studentId === 'st2')).toHaveLength(1);
     expect(ws.marks.every((x) => x.unitId === 'cu1')).toBe(true);
 
@@ -366,6 +379,19 @@ describe('migrateLegacy', () => {
     const normalized = normalizeWorkspace(ws);
     expect(normalized.marks).toHaveLength(ws.marks.length);
     expect(normalized.students).toHaveLength(3);
+  });
+
+  it('keeps a 1.x student’s final mark and grade unchanged (practical and /40 exam included)', () => {
+    const ws = migrateLegacy(
+      storage({
+        deeptutor_students_biodata_v2: [{ id: 'std-1729000000001', fullName: 'Grace Achieng' }],
+        deeptutor_student_marks_v2: [{ studentId: 'std-1729000000001', courseUnitId: 'cu1', cat1Score: 14, cat2Score: 13, assignmentScore: 9, practicalScore: 18, finalExamScore: 34 }],
+      }),
+    )!;
+    const r = unitResult(ws.marks, 'std-1729000000001', 'cu1', ws.settings.components, ws.settings.bands, ws.settings.passMark);
+    expect(r.weighted).toBe(88); // 14 + 13 + 9 + 18 + 34, as 1.x computed it
+    expect(r.grade).toBe('A');
+    expect(r.complete).toBe(true);
   });
 
   it('does not turn blank or unreadable 1.x scores into zero marks', () => {

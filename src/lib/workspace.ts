@@ -121,6 +121,7 @@ export function emptyWorkspace(): Workspace {
     marks: [],
     chats: [],
     settings: defaultSettings(),
+    deleted: {},
     updatedAt: now(),
   };
 }
@@ -236,6 +237,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
     passMark: num(s.passMark, 50),
     autoSync: s.autoSync === undefined ? true : Boolean(s.autoSync),
     theme: oneOf(s.theme, ['dark', 'light', 'system'] as const, 'dark'),
+    updatedAt: str(s.updatedAt) || undefined,
   };
   const formats = arr(r.formats).map(
     (f): ExamFormat => ({
@@ -246,6 +248,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
       styleNotes: str(f.styleNotes),
       builtIn: Boolean(f.builtIn),
       createdAt: str(f.createdAt, t),
+      updatedAt: str(f.updatedAt) || undefined,
       sections: arr(f.sections).map((x) => ({
         title: str(x.title),
         type: oneOf(x.type, QUESTION_TYPES, 'short'),
@@ -285,6 +288,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
         academicYear: str(c.academicYear, settings.academicYear),
         notes: str(c.notes),
         createdAt: str(c.createdAt, t),
+        updatedAt: str(c.updatedAt) || undefined,
       }),
     ),
     units: arr(r.units).map(normUnit),
@@ -316,6 +320,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
         ocrPages: num(x.ocrPages),
         unitIds: strs(x.unitIds),
         addedAt: str(x.addedAt, t),
+        updatedAt: str(x.updatedAt) || undefined,
       }),
     ),
     papers: arr(r.papers).map(
@@ -351,6 +356,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
         topicId: str(q.topicId) || undefined,
         source: oneOf(q.source, ['ai', 'paper', 'manual'] as const, 'manual'),
         createdAt: str(q.createdAt, t),
+        updatedAt: str(q.updatedAt) || undefined,
       }),
     ),
     students: arr(r.students).map(normStudent),
@@ -392,8 +398,19 @@ export function normalizeWorkspace(input: unknown): Workspace {
       }),
     ),
     settings,
+    deleted: normDeleted(r.deleted),
     updatedAt: str(r.updatedAt, t),
   };
+}
+
+const TOMBSTONE_DAYS = 180;
+
+function normDeleted(v: unknown): Record<string, string> {
+  if (!isObj(v)) return {};
+  const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 864e5).toISOString();
+  const out: Record<string, string> = {};
+  for (const [k, when] of Object.entries(v)) if (typeof when === 'string' && when > cutoff) out[k] = when;
+  return out;
 }
 
 export function normStudent(s: Raw): Student {
@@ -433,6 +450,35 @@ export const unitLabel = (u: Pick<Unit, 'code' | 'title'>): string => (u.code ? 
 // Migration from Deep Tutor Pro 1.x (localStorage "deeptutor_*_v2" keys).
 // ---------------------------------------------------------------------------
 
+// Items of the 1.x "Load pharmacy sample" demo, recognised by their fixed ids.
+const DEMO_IDS = {
+  programme: 'curr-pharm-01',
+  unitPrefix: 'unit-pha-',
+  notes: /^note-\d{1,2}$/, // user notes were note-<timestamp>
+  students: /^std-0\d$/,
+  marks: /^mark-0\d$/,
+  references: /^ref-(\d{1,2}|demo.*)$/, // user uploads were ref-<timestamp>
+};
+
+/** The 1.x gradebook: raw scores out of these maxima, added up to a percentage. */
+export const LEGACY_COMPONENTS: GradeComponent[] = [
+  { id: 'cat1', name: 'CAT 1', kind: 'coursework', weight: 15, maxScore: 15 },
+  { id: 'cat2', name: 'CAT 2', kind: 'coursework', weight: 15, maxScore: 15 },
+  { id: 'assign', name: 'Assignment', kind: 'assignment', weight: 10, maxScore: 10 },
+  { id: 'prac', name: 'Practical', kind: 'practical', weight: 20, maxScore: 20 },
+  { id: 'exam', name: 'Final exam', kind: 'exam', weight: 40, maxScore: 40 },
+];
+
+export const LEGACY_BANDS: GradeBand[] = [
+  { min: 80, grade: 'A', points: 5, remark: 'Excellent' },
+  { min: 75, grade: 'B+', points: 4.5, remark: 'Very good' },
+  { min: 70, grade: 'B', points: 4, remark: 'Good' },
+  { min: 65, grade: 'C+', points: 3.5, remark: 'Fairly good' },
+  { min: 60, grade: 'C', points: 3, remark: 'Fair' },
+  { min: 50, grade: 'D', points: 2, remark: 'Pass' },
+  { min: 0, grade: 'F', points: 0, remark: 'Fail' },
+];
+
 export function migrateLegacy(read: (key: string) => string | null): Workspace | null {
   const parse = (key: string): unknown => {
     try {
@@ -447,115 +493,122 @@ export function migrateLegacy(read: (key: string) => string | null): Workspace |
   const marks = parse('deeptutor_student_marks_v2');
   const notes = parse('deeptutor_lecture_notes_v2');
   const refs = parse('deeptutor_reference_docs_v2');
-  if (!isObj(pkg) && !Array.isArray(students) && !Array.isArray(refs)) return null;
+  if (!isObj(pkg) && !Array.isArray(students) && !Array.isArray(refs) && !Array.isArray(notes)) return null;
 
-  // The 1.x app shipped a fixed "demo" pharmacy sample; only real user data is carried over.
-  const isDemo = isObj(pkg) && str(pkg.id) === 'curr-pharm-01';
+  // Only the 1.x demo sample is left behind; everything the tutor entered is carried over,
+  // even when the demo curriculum is still stored alongside it.
   const ws = emptyWorkspace();
   const t = now();
-  if (isObj(pkg) && !isDemo) {
-    const programme: Programme = {
-      id: uid('p-'),
-      title: str(pkg.title, 'Programme'),
-      institution: str(pkg.institution),
-      awardLevel: str(pkg.level),
-      durationYears: Math.max(1, Math.round(num(pkg.durationYears, 1))),
-      totalHours: num(pkg.totalCurriculumHours),
-      overview: str(pkg.overviewSummary),
-      entryRequirements: '',
-      assessmentPolicy: '',
-      createdAt: t,
-      updatedAt: t,
-    };
-    ws.programmes.push(programme);
-    for (const cu of arr(pkg.courseUnits)) {
-      ws.units.push({
-        ...normUnit({}),
-        id: str(cu.id) || uid('u-'),
-        programmeId: programme.id,
-        code: str(cu.code),
-        title: str(cu.title, 'Unit'),
-        year: Math.max(1, Math.round(num(cu.yearOfStudy, 1))),
-        semester: Math.round(num(cu.semester, 1)),
-        creditUnits: num(cu.creditUnits),
-        hours: {
-          lecture: num(cu.lectureHours),
-          tutorial: num(cu.tutorialHours),
-          practical: num(cu.practicalHours),
-          clinical: 0,
-          total: num(cu.totalContactHours),
-        },
-        overview: str(cu.courseOverview),
-        aims: strs(cu.generalObjectives),
-        topics: arr(cu.topics).map((tp) =>
-          normTopic({ id: tp.id, title: tp.title, hours: tp.allocatedHours, objectives: tp.learningObjectives, subtopics: tp.subtopics, practicals: tp.suggestedPracticals }),
-        ),
-        analysed: true,
-      });
-    }
-    for (let y = 1; y <= programme.durationYears; y += 1) {
-      ws.classes.push({ id: uid('cl-'), programmeId: programme.id, name: `${programme.title} — Year ${y}`, year: y, intake: '', academicYear: ws.settings.academicYear, notes: '', createdAt: t });
-    }
-  }
-  if (Array.isArray(notes) && !isDemo) {
-    for (const n of arr(notes)) {
-      const md = [`# ${str(n.title)}`, str(n.theoreticalContent), str(n.workedExamplesOrCases), str(n.clinicalOrLabPracticum)].filter(Boolean).join('\n\n');
-      ws.notes.push({ id: str(n.id) || uid('n-'), unitId: str(n.courseUnitId), topicId: str(n.topicId) || undefined, title: str(n.title, 'Lecture notes'), markdown: md, hourStart: 1, hourEnd: 1, status: 'draft', sourceIds: [], model: '', createdAt: t, updatedAt: t });
-    }
-  }
-  if (Array.isArray(refs)) {
-    for (const r of arr(refs)) {
-      if (str(r.id).startsWith('ref-demo')) continue;
-      ws.references.push({ id: str(r.id) || uid('r-'), name: str(r.name, 'Document'), category: 'other', mime: '', size: 0, text: str(r.extractedText), pages: 0, ocrPages: 0, unitIds: [], addedAt: str(r.uploadedAt, t) });
-    }
-  }
-  if (Array.isArray(students) && !isDemo) {
-    const byCohort = new Map<string, string>();
-    for (const s of arr(students)) {
-      const cohort = str(s.classCohort, `Year ${num(s.yearOfStudy, 1)}`);
-      if (!byCohort.has(cohort)) {
-        const cls: ClassGroup = { id: uid('cl-'), name: cohort, year: Math.max(1, Math.round(num(s.yearOfStudy, 1))), intake: '', academicYear: ws.settings.academicYear, notes: '', createdAt: t };
-        ws.classes.push(cls);
-        byCohort.set(cohort, cls.id);
+  const demoUnit = (id: string) => id.startsWith(DEMO_IDS.unitPrefix);
+  if (isObj(pkg)) {
+    const isDemoPkg = str(pkg.id) === DEMO_IDS.programme;
+    const units = arr(pkg.courseUnits).filter((cu) => !(isDemoPkg && demoUnit(str(cu.id))));
+    if (!isDemoPkg || units.length) {
+      const programme: Programme = {
+        id: uid('p-'),
+        title: str(pkg.title, 'Programme'),
+        institution: str(pkg.institution),
+        awardLevel: str(pkg.level),
+        durationYears: Math.max(1, Math.round(num(pkg.durationYears, 1))),
+        totalHours: num(pkg.totalCurriculumHours),
+        overview: str(pkg.overviewSummary),
+        entryRequirements: '',
+        assessmentPolicy: '',
+        createdAt: t,
+        updatedAt: t,
+      };
+      ws.programmes.push(programme);
+      for (const cu of units) {
+        ws.units.push({
+          ...normUnit({}),
+          id: str(cu.id) || uid('u-'),
+          programmeId: programme.id,
+          code: str(cu.code),
+          title: str(cu.title, 'Unit'),
+          year: Math.max(1, Math.round(num(cu.yearOfStudy, 1))),
+          semester: Math.round(num(cu.semester, 1)),
+          creditUnits: num(cu.creditUnits),
+          hours: {
+            lecture: num(cu.lectureHours),
+            tutorial: num(cu.tutorialHours),
+            practical: num(cu.practicalHours),
+            clinical: 0,
+            total: num(cu.totalContactHours),
+          },
+          overview: str(cu.courseOverview),
+          aims: strs(cu.generalObjectives),
+          topics: arr(cu.topics).map((tp) =>
+            normTopic({ id: tp.id, title: tp.title, hours: tp.allocatedHours, objectives: tp.learningObjectives, subtopics: tp.subtopics, practicals: tp.suggestedPracticals }),
+          ),
+          analysed: true,
+        });
       }
-      const [firstName, ...rest] = str(s.fullName).split(/\s+/);
-      ws.students.push(
-        normStudent({
-          id: s.id,
-          regNo: s.regNumber,
-          firstName,
-          lastName: rest.pop() ?? '',
-          otherNames: rest.join(' '),
-          gender: s.gender,
-          dateOfBirth: s.dateOfBirth,
-          phone: s.contactPhone,
-          email: s.email,
-          address: s.homeDistrictAddress,
-          guardianName: s.nextOfKinName,
-          guardianPhone: s.nextOfKinPhone,
-          guardianRelation: s.nextOfKinRelationship,
-          classId: byCohort.get(cohort),
-          status: s.enrollmentStatus === 'On Leave' ? 'Deferred' : s.enrollmentStatus,
-        }),
-      );
-    }
-    if (Array.isArray(marks)) {
-      const map: [string, string][] = [
-        ['cat1Score', 'cat1'],
-        ['cat2Score', 'cat2'],
-        ['assignmentScore', 'assign'],
-        ['finalExamScore', 'exam'],
-      ];
-      const max: Record<string, number> = { cat1Score: 15, cat2Score: 15, assignmentScore: 10, finalExamScore: 100 };
-      for (const m of arr(marks)) {
-        for (const [field, comp] of map) {
-          // Blank or unreadable 1.x scores stay unentered; they must not become a 0 mark.
-          const raw = num(m[field], NaN);
-          if (!Number.isFinite(raw)) continue;
-          ws.marks.push({ id: uid('m-'), studentId: str(m.studentId), unitId: str(m.courseUnitId), componentId: comp, score: Math.round((raw / max[field]) * 1000) / 10, remark: str(m.remarks), updatedAt: t });
-        }
+      for (let y = 1; y <= programme.durationYears; y += 1) {
+        ws.classes.push({ id: uid('cl-'), programmeId: programme.id, name: `${programme.title} — Year ${y}`, year: y, intake: '', academicYear: ws.settings.academicYear, notes: '', createdAt: t });
       }
     }
+  }
+  for (const n of arr(notes)) {
+    if (DEMO_IDS.notes.test(str(n.id)) && demoUnit(str(n.courseUnitId))) continue;
+    const md = [`# ${str(n.title)}`, str(n.theoreticalContent), str(n.workedExamplesOrCases), str(n.clinicalOrLabPracticum)].filter(Boolean).join('\n\n');
+    ws.notes.push({ id: str(n.id) || uid('n-'), unitId: str(n.courseUnitId), topicId: str(n.topicId) || undefined, title: str(n.title, 'Lecture notes'), markdown: md, hourStart: 1, hourEnd: 1, status: 'draft', sourceIds: [], model: '', createdAt: t, updatedAt: t });
+  }
+  for (const r of arr(refs)) {
+    if (DEMO_IDS.references.test(str(r.id))) continue;
+    ws.references.push({ id: str(r.id) || uid('r-'), name: str(r.name, 'Document'), category: 'other', mime: '', size: 0, text: str(r.extractedText), pages: 0, ocrPages: 0, unitIds: [], addedAt: str(r.uploadedAt, t) });
+  }
+  const realStudents = arr(students).filter((s) => !DEMO_IDS.students.test(str(s.id)));
+  const byCohort = new Map<string, string>();
+  for (const s of realStudents) {
+    const cohort = str(s.classCohort, `Year ${num(s.yearOfStudy, 1)}`);
+    if (!byCohort.has(cohort)) {
+      const cls: ClassGroup = { id: uid('cl-'), name: cohort, year: Math.max(1, Math.round(num(s.yearOfStudy, 1))), intake: '', academicYear: ws.settings.academicYear, notes: '', createdAt: t };
+      ws.classes.push(cls);
+      byCohort.set(cohort, cls.id);
+    }
+    const [firstName, ...rest] = str(s.fullName).split(/\s+/);
+    ws.students.push(
+      normStudent({
+        id: s.id,
+        regNo: s.regNumber,
+        firstName,
+        lastName: rest.pop() ?? '',
+        otherNames: rest.join(' '),
+        gender: s.gender,
+        dateOfBirth: s.dateOfBirth,
+        phone: s.contactPhone,
+        email: s.email,
+        address: s.homeDistrictAddress,
+        guardianName: s.nextOfKinName,
+        guardianPhone: s.nextOfKinPhone,
+        guardianRelation: s.nextOfKinRelationship,
+        classId: byCohort.get(cohort),
+        status: s.enrollmentStatus === 'On Leave' ? 'Deferred' : s.enrollmentStatus,
+      }),
+    );
+  }
+  const map: [string, string][] = [
+    ['cat1Score', 'cat1'],
+    ['cat2Score', 'cat2'],
+    ['assignmentScore', 'assign'],
+    ['practicalScore', 'prac'],
+    ['finalExamScore', 'exam'],
+  ];
+  const known = new Set(ws.students.map((s) => s.id));
+  for (const m of arr(marks)) {
+    if (DEMO_IDS.marks.test(str(m.id)) || !known.has(str(m.studentId))) continue;
+    for (const [field, comp] of map) {
+      // Blank or unreadable 1.x scores stay unentered; they must not become a 0 mark.
+      const raw = num(m[field], NaN);
+      if (!Number.isFinite(raw)) continue;
+      // Raw scores are kept on the 1.x scale (see LEGACY_COMPONENTS), so finals and grades are unchanged.
+      ws.marks.push({ id: uid('m-'), studentId: str(m.studentId), unitId: str(m.courseUnitId), componentId: comp, score: raw, remark: str(m.remarks), updatedAt: t });
+    }
+  }
+  if (ws.marks.length) {
+    ws.settings.components = LEGACY_COMPONENTS.map((c) => ({ ...c }));
+    ws.settings.bands = LEGACY_BANDS.map((b) => ({ ...b }));
+    ws.settings.passMark = 50;
   }
   if (!ws.units.length && !ws.students.length && !ws.references.length && !ws.notes.length) return null;
   return ws;

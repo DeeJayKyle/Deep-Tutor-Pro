@@ -195,7 +195,17 @@ export function applyOutline(ws: Workspace, outline: Outline, opts: { referenceI
 }
 
 export function applyUnitDetail(unit: Unit, d: UnitDetail): Unit {
-  const topics: Topic[] = d.topics.map((t) => ({ id: uid('t-'), title: t.title, hours: t.hours, objectives: t.objectives, subtopics: t.subtopics, practicals: t.practicals }));
+  // Topics already in the unit keep their ids, so notes, bank questions and
+  // papers linked to them stay linked when the outline is read again.
+  const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const existing = new Map(unit.topics.map((t) => [key(t.title), t.id]));
+  const used = new Set<string>();
+  const topics: Topic[] = d.topics.map((t) => {
+    const keep = existing.get(key(t.title));
+    const id = keep && !used.has(keep) ? keep : uid('t-');
+    used.add(id);
+    return { id, title: t.title, hours: t.hours, objectives: t.objectives, subtopics: t.subtopics, practicals: t.practicals };
+  });
   return {
     ...unit,
     overview: d.overview || unit.overview,

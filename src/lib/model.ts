@@ -30,6 +30,7 @@ export interface ClassGroup {
   academicYear: string; // e.g. "2026/2027"
   notes: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Topic {
@@ -107,6 +108,7 @@ export interface Reference {
   ocrPages: number;
   unitIds: ID[];
   addedAt: string;
+  updatedAt?: string;
 }
 
 export type QuestionType =
@@ -187,6 +189,7 @@ export interface ExamFormat {
   sections: FormatSection[];
   builtIn?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BankQuestion extends Question {
@@ -194,6 +197,7 @@ export interface BankQuestion extends Question {
   topicId?: ID;
   source: 'ai' | 'paper' | 'manual';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type Gender = 'Female' | 'Male' | 'Other' | '';
@@ -285,6 +289,7 @@ export interface Settings {
   passMark: number;
   autoSync: boolean;
   theme: 'dark' | 'light' | 'system';
+  updatedAt?: string; // when settings last changed (used when combining devices)
 }
 
 export interface Workspace {
@@ -301,7 +306,11 @@ export interface Workspace {
   marks: MarkEntry[];
   chats: Chat[];
   settings: Settings;
+  /** Deleted item ids → when, so a deletion is not undone when two devices are combined. */
+  deleted: Record<ID, string>;
   updatedAt: string;
 }
 
-export type Collection = Exclude<keyof Workspace, 'schema' | 'settings' | 'updatedAt'>;
+export type Collection = Exclude<keyof Workspace, 'schema' | 'settings' | 'updatedAt' | 'deleted'>;
+
+export const COLLECTIONS: Collection[] = ['programmes', 'classes', 'units', 'notes', 'references', 'papers', 'formats', 'bank', 'students', 'marks', 'chats'];

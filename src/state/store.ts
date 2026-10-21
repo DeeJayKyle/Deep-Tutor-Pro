@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { Collection, Settings, Workspace } from '../lib/model';
+import { COLLECTIONS } from '../lib/model';
 import { dbGet, dbSet, requestPersistence } from '../lib/db';
 import { emptyWorkspace, migrateLegacy, normalizeWorkspace, now } from '../lib/workspace';
 import { ApiError, getSession } from '../lib/api';
@@ -75,9 +76,46 @@ async function persist(): Promise<void> {
   }
 }
 
+/**
+ * Time-stamp edited items and record deleted ids, so that combining this
+ * device's copy with another device's keeps the newest edits and deletions.
+ */
+export function stampChanges(prev: Workspace, next: Workspace, t = now()): Workspace {
+  let out = next;
+  let deleted = next.deleted;
+  for (const key of COLLECTIONS) {
+    const before = prev[key] as unknown as { id: string; updatedAt?: string }[];
+    const after = next[key] as unknown as { id: string; updatedAt?: string }[];
+    if (before === after) continue;
+    const old = new Map(before.map((x) => [x.id, x]));
+    const seen = new Set<string>();
+    let changed = false;
+    const stamped = after.map((item) => {
+      seen.add(item.id);
+      const was = old.get(item.id);
+      if (was && was !== item && item.updatedAt === was.updatedAt) {
+        changed = true;
+        return { ...item, updatedAt: t };
+      }
+      return item;
+    });
+    if (changed) out = { ...out, [key]: stamped };
+    for (const id of old.keys()) {
+      if (!seen.has(id)) {
+        if (deleted === next.deleted) deleted = { ...deleted };
+        deleted[id] = t;
+      }
+    }
+  }
+  if (deleted !== next.deleted) out = { ...out, deleted };
+  if (prev.settings !== next.settings && next.settings.updatedAt === prev.settings.updatedAt) out = { ...out, settings: { ...next.settings, updatedAt: t } };
+  return out;
+}
+
 /** Apply a change. The updater must return a new object (never mutate). */
 export function update(fn: (w: Workspace) => Workspace): void {
-  ws = { ...fn(ws), updatedAt: now() };
+  const t = now();
+  ws = { ...stampChanges(ws, fn(ws), t), updatedAt: t };
   emit();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -159,9 +197,14 @@ export function scheduleSync(delay = 8000): void {
 }
 
 let running: Promise<void> | null = null;
+let again = false;
 
 export function runSync(): Promise<void> {
-  if (running) return running;
+  if (running) {
+    // A change arrived during this sync: sync once more when it finishes.
+    again = true;
+    return running;
+  }
   running = (async () => {
     if (!getSession()) {
       setSync({ state: 'signed-out', message: 'Sign in to back up and sync.' });
@@ -208,6 +251,10 @@ export function runSync(): Promise<void> {
       setSync({ state: offline ? 'offline' : 'error', message: offline ? 'Offline — will sync when connected' : (err as Error).message });
     } finally {
       running = null;
+      if (again) {
+        again = false;
+        scheduleSync(1000);
+      }
     }
   })();
   return running;

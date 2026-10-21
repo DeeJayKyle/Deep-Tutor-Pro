@@ -3,7 +3,8 @@
 // device that missed changes made elsewhere gets a conflict to review instead
 // of silently overwriting them.
 
-import type { Collection, Workspace } from './model';
+import type { Workspace } from './model';
+import { COLLECTIONS } from './model';
 import { ApiError, cloud, deviceName, getSession, isOnline } from './api';
 import { dbGet, dbSet } from './db';
 import { normalizeWorkspace } from './workspace';
@@ -33,11 +34,17 @@ export function serialize(ws: Workspace): string {
   return JSON.stringify(content);
 }
 
-export const getSyncState = async (): Promise<SyncState> => (await dbGet<SyncState>('sync-state')) ?? { rev: 0, sha: '', syncedAt: null };
-const saveSyncState = (s: SyncState) => dbSet('sync-state', s);
+/** Sync progress is kept per server and account: another account's revision means nothing here. */
+function syncKey(): string {
+  const s = getSession();
+  return `sync-state:${s?.server ?? ''}|${s?.username ?? ''}`;
+}
+export const getSyncState = async (): Promise<SyncState> => (await dbGet<SyncState>(syncKey())) ?? { rev: 0, sha: '', syncedAt: null };
+const saveSyncState = (s: SyncState) => dbSet(syncKey(), s);
 
+/** Nothing the tutor made yet: a fresh device that can simply take the cloud copy. */
 export function isEmptyWorkspace(ws: Workspace): boolean {
-  return !ws.units.length && !ws.students.length && !ws.references.length && !ws.notes.length && !ws.papers.length && !ws.classes.length;
+  return COLLECTIONS.every((k) => (k === 'formats' ? ws.formats.every((f) => f.builtIn) : ws[k].length === 0)) && !ws.settings.updatedAt;
 }
 
 function parseCloud(data: string | null): Workspace {
@@ -99,16 +106,17 @@ export async function acceptCloud(ws: Workspace, rev: number): Promise<void> {
   await saveSyncState({ rev, sha: await sha256(serialize(ws)), syncedAt: new Date().toISOString() });
 }
 
-const COLLECTIONS: Collection[] = ['programmes', 'classes', 'units', 'notes', 'references', 'papers', 'formats', 'bank', 'students', 'marks', 'chats'];
-
 const stamp = (item: Record<string, unknown>): string => String(item.updatedAt ?? item.addedAt ?? item.createdAt ?? '');
 
 /**
- * Combine two workspaces item by item: everything from both is kept, and
- * where both changed the same item the more recently edited version wins.
+ * Combine two workspaces item by item: everything from both is kept, where
+ * both changed the same item the more recently edited version wins, and items
+ * deleted on either side (after their last edit) stay deleted.
  */
 export function mergeWorkspaces(local: Workspace, remote: Workspace): Workspace {
-  const out = { ...local } as Workspace;
+  const deleted: Record<string, string> = { ...remote.deleted };
+  for (const [id, when] of Object.entries(local.deleted)) if (!deleted[id] || when > deleted[id]) deleted[id] = when;
+  const out = { ...local, deleted } as Workspace;
   for (const key of COLLECTIONS) {
     const byId = new Map<string, Record<string, unknown>>();
     for (const item of local[key] as unknown as Record<string, unknown>[]) byId.set(String(item.id), item);
@@ -116,7 +124,11 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace): Workspace 
       const mine = byId.get(String(item.id));
       if (!mine || stamp(item) > stamp(mine)) byId.set(String(item.id), item);
     }
-    (out as unknown as Record<string, unknown>)[key] = [...byId.values()];
+    const kept = [...byId.values()].filter((item) => {
+      const gone = deleted[String(item.id)];
+      return !gone || gone < stamp(item);
+    });
+    (out as unknown as Record<string, unknown>)[key] = kept;
   }
   // Marks are keyed by student, unit and component: keep one entry per key.
   const marks = new Map<string, Workspace['marks'][number]>();
@@ -126,14 +138,14 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace): Workspace 
     if (!prev || m.updatedAt > prev.updatedAt) marks.set(k, m);
   }
   out.marks = [...marks.values()];
-  out.settings = remote.updatedAt > local.updatedAt ? remote.settings : local.settings;
+  out.settings = (remote.settings.updatedAt ?? '') > (local.settings.updatedAt ?? '') ? remote.settings : local.settings;
   out.updatedAt = new Date().toISOString();
   return out;
 }
 
 /** What differs between two workspaces, for the conflict review screen. */
 export function diffSummary(local: Workspace, remote: Workspace): { label: string; onlyLocal: number; onlyCloud: number; changed: number }[] {
-  const labels: Record<Collection, string> = {
+  const labels: Record<(typeof COLLECTIONS)[number], string> = {
     programmes: 'Programmes',
     classes: 'Classes',
     units: 'Course units',

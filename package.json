@@ -10,7 +10,6 @@
     "preview": "vite preview --port 3000",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "schemas": "node scripts/generate-schemas.mjs",
     "predev": "node scripts/vendor-assets.mjs",
     "prebuild": "node scripts/vendor-assets.mjs"
   },
@@ -30,8 +29,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2",
-    "tesseract.js": "^7.0.0",
-    "zod": "^4.6.7"
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

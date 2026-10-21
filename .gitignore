@@ -296,3 +296,6 @@ coverage/
 packaging/*/web/
 packaging/windows/release/
 packaging/android/android/
+
+# On-device OCR engine copied from node_modules by scripts/vendor-assets.mjs
+public/vendor/

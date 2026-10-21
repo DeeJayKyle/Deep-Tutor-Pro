@@ -113,10 +113,10 @@ function Overview() {
                     <Card key={c.id} title={<A to={`/students/class/${c.id}`}>{c.name}</A>} actions={<Badge>{c.academicYear || ws.settings.academicYear}</Badge>}>
                       <div className="mb-3 flex gap-4 text-sm">
                         <span>
-                          <strong>{students.length}</strong> <span className="text-muted">students</span>
+                          <strong>{students.length}</strong> <span className="text-muted">{students.length === 1 ? 'student' : 'students'}</span>
                         </span>
                         <span>
-                          <strong>{units.length}</strong> <span className="text-muted">units</span>
+                          <strong>{units.length}</strong> <span className="text-muted">{units.length === 1 ? 'unit' : 'units'}</span>
                         </span>
                         {c.intake && <span className="text-muted">Intake {c.intake}</span>}
                       </div>

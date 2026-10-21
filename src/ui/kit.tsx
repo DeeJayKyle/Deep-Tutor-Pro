@@ -215,16 +215,17 @@ export function Select({ className, children, ...p }: React.SelectHTMLAttributes
 }
 
 /** Text input that commits on blur / Enter (avoids saving on every keystroke). */
-export function EditableText({ value, onCommit, placeholder, className, multiline, ariaLabel, type = 'text' }: { value: string; onCommit: (v: string) => void; placeholder?: string; className?: string; multiline?: boolean; ariaLabel?: string; type?: string }) {
+export function EditableText({ value, onCommit, placeholder, className, multiline, ariaLabel, type = 'text', id }: { value: string; onCommit: (v: string) => void; placeholder?: string; className?: string; multiline?: boolean; ariaLabel?: string; type?: string; id?: string }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
     if (draft !== value) onCommit(draft);
   };
   if (multiline)
-    return <Textarea aria-label={ariaLabel} className={className} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={commit} />;
+    return <Textarea id={id} aria-label={ariaLabel} className={className} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={commit} />;
   return (
     <Input
+      id={id}
       aria-label={ariaLabel}
       type={type}
       className={className}
@@ -241,12 +242,13 @@ export function EditableText({ value, onCommit, placeholder, className, multilin
 }
 
 /** Edit a list of short texts (objectives, subtopics…) as one line per item. */
-export function LinesEditor({ value, onCommit, placeholder, ariaLabel, rows = 4 }: { value: string[]; onCommit: (v: string[]) => void; placeholder?: string; ariaLabel?: string; rows?: number }) {
+export function LinesEditor({ value, onCommit, placeholder, ariaLabel, rows = 4, id }: { value: string[]; onCommit: (v: string[]) => void; placeholder?: string; ariaLabel?: string; rows?: number; id?: string }) {
   const text = value.join('\n');
   const [draft, setDraft] = useState(text);
   useEffect(() => setDraft(text), [text]);
   return (
     <Textarea
+      id={id}
       aria-label={ariaLabel}
       rows={rows}
       value={draft}

@@ -190,7 +190,7 @@ export default function SolveView() {
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
           <BrainCircuit className="h-5 w-5 text-accent" />
-          <span className="font-semibold">Deep Solve</span>
+          <h1 className="font-semibold">Deep Solve</h1>
           <div className="flex rounded-lg border border-line p-0.5">
             {MODES.map((m) => (
               <button key={m.id} title={m.hint} onClick={() => setMode(m.id)} className={cx('rounded-md px-2.5 py-1 text-xs', mode === m.id ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink')}>

@@ -50,6 +50,13 @@ export async function loadWorkspace(): Promise<void> {
   }
   ws = saved ? normalizeWorkspace(saved) : emptyWorkspace();
   loaded = true;
+  // Save pending edits straight away when the app is closed or hidden.
+  const flushNow = () => {
+    if (saveTimer) void flush();
+  };
+  window.addEventListener('pagehide', flushNow);
+  window.addEventListener('beforeunload', flushNow);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushNow());
   if (saved) await persist();
   void requestPersistence();
   emit();
@@ -73,7 +80,10 @@ export function update(fn: (w: Workspace) => Workspace): void {
   ws = { ...fn(ws), updatedAt: now() };
   emit();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => void persist(), 300);
+  saveTimer = setTimeout(() => {
+    saveTimer = undefined;
+    void persist();
+  }, 300);
   scheduleSync();
 }
 
@@ -86,6 +96,7 @@ export async function replaceWorkspace(next: Workspace): Promise<void> {
 
 export const flush = async () => {
   clearTimeout(saveTimer);
+  saveTimer = undefined;
   await persist();
 };
 
@@ -160,7 +171,8 @@ export function runSync(): Promise<void> {
     setSync({ state: 'syncing', message: 'Syncing…' });
     try {
       await flush();
-      const result = await syncNow(ws);
+      const snapshot = ws;
+      const result = await syncNow(snapshot);
       const at = new Date().toISOString();
       switch (result.kind) {
         case 'up-to-date':
@@ -170,8 +182,16 @@ export function runSync(): Promise<void> {
           setSync({ state: 'idle', message: 'Saved to the cloud', lastSynced: at });
           break;
         case 'pulled':
-          await replaceWorkspace(result.ws);
-          setSync({ state: 'idle', message: 'Updated from the cloud', lastSynced: at });
+          if (ws === snapshot) {
+            await replaceWorkspace(result.ws);
+            setSync({ state: 'idle', message: 'Updated from the cloud', lastSynced: at });
+          } else {
+            // Edits made while the cloud copy was downloading are kept: combine
+            // both, then upload the combined copy on the next sync.
+            await replaceWorkspace(mergeWorkspaces(ws, result.ws));
+            setSync({ state: 'idle', message: 'Updated from the cloud', lastSynced: at });
+            scheduleSync(1000);
+          }
           break;
         case 'conflict':
           setSync({ state: 'conflict', message: 'Changes on another device need review', conflict: result });

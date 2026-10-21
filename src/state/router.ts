@@ -34,7 +34,10 @@ export function href(path: string, query?: Record<string, string | undefined>): 
 
 export function navigate(path: string, query?: Record<string, string | undefined>, replace = false): void {
   const target = href(path, query);
-  if (replace) window.history.replaceState(null, '', target);
-  else window.location.hash = target.slice(1);
-  if (replace) window.dispatchEvent(new HashChangeEvent('hashchange'));
+  if (replace) {
+    window.history.replaceState(null, '', target);
+    // Dispatched after the current render so listeners registered in parent
+    // effects (which run after child effects) still receive it.
+    setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);
+  } else window.location.hash = target.slice(1);
 }

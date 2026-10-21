@@ -24,6 +24,7 @@ import { loadWorkspace, onSessionChanged, runSync, store, useSaveError, useSyncS
 import { adoptCookieSession, getSession, loadSession, onSession } from './lib/api';
 import { Button, Spinner, UiProvider, cx } from './ui/kit';
 import { ConflictDialog } from './views/ConflictDialog';
+import { cancelJob, dismissJob, useJobs } from './state/jobs';
 
 const HomeView = lazy(() => import('./views/Home'));
 const CurriculumView = lazy(() => import('./views/Curriculum'));
@@ -140,6 +141,50 @@ function SyncBadge() {
   );
 }
 
+function JobsTray() {
+  const jobs = useJobs();
+  const [open, setOpen] = useState(false);
+  if (!jobs.length) return null;
+  const running = jobs.filter((j) => j.status === 'running');
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} className={cx('flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs', running.length ? 'bg-accent/15 text-accent' : 'bg-panel2 text-muted')}>
+        {running.length ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        {running.length ? `${running.length} AI task${running.length > 1 ? 's' : ''} running` : 'AI tasks finished'}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-line bg-panel p-3 shadow-2xl">
+          {jobs.map((j) => (
+            <div key={j.id} className="mb-3 last:mb-0">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <a href={j.link ? href(j.link) : undefined} className="truncate font-medium hover:text-accent">
+                  {j.label}
+                </a>
+                {j.status === 'running' ? (
+                  <button className="text-xs text-muted hover:text-bad" onClick={() => cancelJob(j.id)}>
+                    Stop
+                  </button>
+                ) : (
+                  <button className="text-xs text-muted hover:text-ink" onClick={() => dismissJob(j.id)}>
+                    Dismiss
+                  </button>
+                )}
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-panel2">
+                <div className="h-full bg-accent" style={{ width: `${j.total ? (j.done / j.total) * 100 : 100}%` }} />
+              </div>
+              <div className="mt-0.5 truncate text-[11px] text-muted">
+                {j.done}/{j.total} · {j.message}
+                {j.errors.length > 0 && <span className="text-bad"> · {j.errors.length} problem(s)</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Shell() {
   const route = useRoute();
   const ws = useWorkspace();
@@ -218,6 +263,7 @@ function Shell() {
           </button>
           <span className="truncate text-sm font-semibold lg:hidden">Deep Tutor Pro</span>
           <div className="ml-auto flex items-center gap-2">
+            <JobsTray />
             <SyncBadge />
           </div>
         </header>

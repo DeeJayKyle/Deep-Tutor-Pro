@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, BookOpen, ClipboardList, FileText, ListChecks, Plus, Search, Trash2, Upload, Wand2 } from 'lucide-react';
 import type { Topic, Unit } from '../lib/model';
 import { ACCEPT } from '../lib/extract';
@@ -56,8 +56,10 @@ function UnitList() {
   const programme = route.query.get('programme') ?? '';
   const year = route.query.get('year') ?? '';
   const setFilter = (k: string, v: string) => navigate('/units', { programme: k === 'programme' ? v || undefined : programme || undefined, year: k === 'year' ? v || undefined : year || undefined }, true);
+  const added = useRef(false);
   useEffect(() => {
-    if (route.query.get('add') === '1') {
+    if (route.query.get('add') === '1' && !added.current) {
+      added.current = true;
       const u = blankUnit(route.query.get('programme') ?? ws.programmes[0]?.id, Number(year) || 1);
       upsert('units', u);
       navigate(`/units/${u.id}`, undefined, true);

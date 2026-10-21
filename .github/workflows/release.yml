@@ -1,0 +1,509 @@
+name: Release Deep Tutor Pro
+# Builds the web app, the Windows installer and the Android APK, then publishes
+# a GitHub release tagged v<version> with all three plus SHA256SUMS.txt.
+#
+# Run from Actions -> Release Deep Tutor Pro -> Run workflow, or push a v2.* tag.
+# An existing release is never overwritten unless "replace" is ticked, and the
+# v1.6.14 release is never touched.
+#
+# Signing (optional repository secrets; never commit keys):
+#   Windows: WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD
+#   Android: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+#            ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# Without them the installer is signed with a self-signed certificate and the
+# APK with a temporary key generated for this run; the release notes say so.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 2.0.0); the tag is v<version>"
+        required: true
+        default: "2.0.0"
+      title:
+        description: "Release title"
+        required: true
+        default: "Deep Tutor Pro 2.0"
+      prerelease:
+        description: "Mark as a pre-release"
+        type: boolean
+        default: false
+      replace:
+        description: "Replace an existing release with the same tag"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v2.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # Tag pushes have no inputs: derive the version from the tag (v2.0.0 -> 2.0.0).
+  VERSION: ${{ inputs.version || github.ref_name }}
+
+jobs:
+  web:
+    name: Web app (lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      version_code: ${{ steps.meta.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: meta
+        run: |
+          version="${VERSION#v}"
+          if ! [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Version '$version' is not of the form MAJOR.MINOR.PATCH[-suffix]"; exit 1
+          fi
+          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+          if [ "$minor" -gt 99 ] || [ "$patch" -gt 99 ]; then
+            echo "::error::Minor and patch must be below 100 for the Android versionCode"; exit 1
+          fi
+          code=$((major * 10000 + minor * 100 + patch))
+          if [ "v$version" = "v1.6.14" ]; then
+            echo "::error::v1.6.14 is an existing release and is never rebuilt by this workflow"; exit 1
+          fi
+          app_version="$(node -p "require('./package.json').version")"
+          if [ "$app_version" != "$version" ]; then
+            echo "::warning::package.json says $app_version but this release is $version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$code" >> "$GITHUB_OUTPUT"
+          echo "Version $version (Android versionCode $code)"
+
+      - name: Check the release does not already exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPLACE: ${{ inputs.replace || false }}
+          TAG: v${{ steps.meta.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "$REPLACE" = "true" ]; then
+              echo "::warning::Release $TAG exists and will be replaced"
+            else
+              echo "::error::Release $TAG already exists. Re-run with 'replace' ticked to replace it."; exit 1
+            fi
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm config set fetch-retries 5
+          npm ci
+
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Zip the web app
+        run: |
+          test -f dist/index.html
+          mkdir -p release-assets
+          (cd dist && zip -r -X -q "../release-assets/deep-tutor-pro-web-${{ steps.meta.outputs.version }}.zip" .)
+          unzip -l "release-assets/deep-tutor-pro-web-${{ steps.meta.outputs.version }}.zip" | grep -E ' index\.html$'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: release-assets/deep-tutor-pro-web-*.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    needs: web
+    runs-on: windows-latest
+    timeout-minutes: 40
+    outputs:
+      signing: ${{ steps.cert.outputs.signing }}
+    env:
+      APP_VERSION: ${{ needs.web.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packaging/windows/package-lock.json
+
+      - name: Copy the web app into the desktop shell
+        shell: bash
+        run: node scripts/prepare-native.mjs
+
+      - name: Install Electron tooling
+        shell: bash
+        working-directory: packaging/windows
+        run: |
+          npm config set fetch-retries 5
+          npm ci
+          npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Prepare code-signing certificate
+        id: cert
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          if ($env:WINDOWS_CERT_PFX_BASE64 -and $env:WINDOWS_CERT_PASSWORD) {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+            $password = $env:WINDOWS_CERT_PASSWORD
+            "signing=certificate" >> $env:GITHUB_OUTPUT
+            Write-Host 'Signing with the certificate from repository secrets.'
+          } else {
+            $password = [guid]::NewGuid().ToString('N')
+            Write-Host "::add-mask::$password"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert `
+              -Subject 'CN=Deep Tutor Pro (self-signed)' `
+              -CertStoreLocation 'Cert:\CurrentUser\My' `
+              -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
+              -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(3)
+            $secure = ConvertTo-SecureString -String $password -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
+            "signing=self-signed" >> $env:GITHUB_OUTPUT
+            Write-Host '::warning::No WINDOWS_CERT_* secrets: signing with a self-signed certificate.'
+          }
+          "CSC_LINK=$pfx" >> $env:GITHUB_ENV
+          "CSC_KEY_PASSWORD=$password" >> $env:GITHUB_ENV
+
+      - name: Build Windows x64 installer
+        shell: bash
+        working-directory: packaging/windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Verify the installer
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem "packaging/windows/out/Deep-Tutor-Pro-$env:APP_VERSION-Windows-x64-Setup.exe")
+          if ($files.Count -ne 1) { throw 'Expected exactly one installer' }
+          $exe = $files[0].FullName
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw 'Installer does not start with MZ' }
+          $sig = Get-AuthenticodeSignature -FilePath $exe
+          if ($null -eq $sig.SignerCertificate) { throw 'Installer is not signed' }
+          Write-Host "Signed by: $($sig.SignerCertificate.Subject) (status: $($sig.Status))"
+          Get-FileHash -Algorithm SHA256 $exe | Format-List
+
+      - name: Remove signing material
+        if: always()
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP 'codesign.pfx')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: packaging/windows/out/Deep-Tutor-Pro-*-Windows-x64-Setup.exe
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      signing: ${{ steps.keystore.outputs.signing }}
+    env:
+      APP_VERSION: ${{ needs.web.outputs.version }}
+      VERSION_CODE: ${{ needs.web.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packaging/android/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Copy the web app into the Android shell
+        run: node scripts/prepare-native.mjs
+
+      - name: Install Capacitor
+        working-directory: packaging/android
+        run: |
+          npm config set fetch-retries 5
+          npm ci
+
+      - name: Generate the Android project
+        working-directory: packaging/android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Set version and microphone permissions
+        working-directory: packaging/android/android
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+
+          gradle = Path('app/build.gradle')
+          text = gradle.read_text()
+          text, n1 = re.subn(r'versionCode\s+\d+', f"versionCode {os.environ['VERSION_CODE']}", text, count=1)
+          text, n2 = re.subn(r'versionName\s+"[^"]*"', f'versionName "{os.environ["APP_VERSION"]}"', text, count=1)
+          if n1 != 1 or n2 != 1:
+              raise SystemExit('Could not set versionCode/versionName in app/build.gradle')
+          gradle.write_text(text)
+
+          # Capacitor's BridgeWebChromeClient asks for RECORD_AUDIO and
+          # MODIFY_AUDIO_SETTINGS at runtime when the page calls getUserMedia,
+          # but only permissions declared in the manifest can be granted.
+          manifest = Path('app/src/main/AndroidManifest.xml')
+          xml = manifest.read_text()
+          wanted = ['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS']
+          lines = ''.join(f'    <uses-permission android:name="{p}" />\n' for p in wanted if p not in xml)
+          if lines:
+              xml = xml.replace('</manifest>', lines + '</manifest>', 1)
+          manifest.write_text(xml)
+          for p in wanted:
+              assert p in xml, p
+          PY
+          grep -n uses-permission app/src/main/AndroidManifest.xml
+          grep -nE 'applicationId|versionCode|versionName' app/build.gradle
+
+      - name: Generate app icons
+        continue-on-error: true
+        working-directory: packaging/android
+        run: |
+          python -m pip install --quiet "pillow>=10,<13"
+          python ../icons/make_icon.py assets
+          npx --yes @capacitor/assets@3.0.5 generate --android --assetPath assets
+
+      - name: Prepare signing key
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          store="$RUNNER_TEMP/release.keystore"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$store"
+            store_pw="$ANDROID_KEYSTORE_PASSWORD"
+            alias="$ANDROID_KEY_ALIAS"
+            key_pw="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+            echo "signing=certificate" >> "$GITHUB_OUTPUT"
+            echo "Signing with the keystore from repository secrets."
+          else
+            store_pw="$(openssl rand -hex 24)"
+            echo "::add-mask::$store_pw"
+            key_pw="$store_pw"
+            alias="deeptutorpro"
+            keytool -genkeypair -noprompt -keystore "$store" -storetype PKCS12 \
+              -storepass "$store_pw" -keypass "$key_pw" -alias "$alias" \
+              -keyalg RSA -keysize 3072 -validity 10000 \
+              -dname "CN=Deep Tutor Pro (temporary CI key), O=Deep Tutor Pro"
+            echo "signing=temporary" >> "$GITHUB_OUTPUT"
+            echo "::warning::No ANDROID_* signing secrets: signing with a temporary key generated for this run."
+          fi
+          {
+            echo "ORG_GRADLE_PROJECT_dtpStoreFile=$store"
+            echo "ORG_GRADLE_PROJECT_dtpStorePassword=$store_pw"
+            echo "ORG_GRADLE_PROJECT_dtpKeyAlias=$alias"
+            echo "ORG_GRADLE_PROJECT_dtpKeyPassword=$key_pw"
+          } >> "$GITHUB_ENV"
+
+      - name: Wire release signing into Gradle
+        working-directory: packaging/android/android
+        run: |
+          # Values come from ORG_GRADLE_PROJECT_* environment variables, so no
+          # secret is written into the project files.
+          cat >> app/build.gradle <<'GRADLE'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(project.property('dtpStoreFile'))
+                      storePassword project.property('dtpStorePassword')
+                      keyAlias project.property('dtpKeyAlias')
+                      keyPassword project.property('dtpKeyPassword')
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          GRADLE
+
+      - name: Build release APK
+        working-directory: packaging/android/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Verify APK
+        run: |
+          apk=packaging/android/android/app/build/outputs/apk/release/app-release.apk
+          test -f "$apk"
+          tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$tools/apksigner" verify --verbose "$apk"
+          badging="$("$tools/aapt" dump badging "$apk")"
+          echo "$badging" | grep "package: name='com.deejaykyle.deeptutorpro' versionCode='$VERSION_CODE' versionName='$APP_VERSION'"
+          echo "$badging" | grep "uses-permission: name='android.permission.RECORD_AUDIO'"
+          mkdir -p release-assets
+          cp "$apk" "release-assets/Deep-Tutor-Pro-$APP_VERSION-Android.apk"
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: release-assets/Deep-Tutor-Pro-*-Android.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [web, windows, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      APP_VERSION: ${{ needs.web.outputs.version }}
+      WINDOWS_SIGNING: ${{ needs.windows.outputs.signing }}
+      ANDROID_SIGNING: ${{ needs.android.outputs.signing }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: release-assets
+
+      - name: Check assets and write checksums
+        working-directory: release-assets
+        run: |
+          ls -la
+          test -f "Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe"
+          test -f "Deep-Tutor-Pro-$APP_VERSION-Android.apk"
+          test -f "deep-tutor-pro-web-$APP_VERSION.zip"
+          sha256sum "Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe" \
+            "Deep-Tutor-Pro-$APP_VERSION-Android.apk" \
+            "deep-tutor-pro-web-$APP_VERSION.zip" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write release notes
+        run: |
+          notes=".github/release-notes/v$APP_VERSION.md"
+          if [ -f "$notes" ]; then
+            sed "s/{{VERSION}}/$APP_VERSION/g" "$notes" > "$RUNNER_TEMP/notes.md"
+          else
+            printf '# Deep Tutor Pro %s\n' "$APP_VERSION" > "$RUNNER_TEMP/notes.md"
+          fi
+          {
+            echo ""
+            echo "## Signing"
+            echo ""
+            if [ "$WINDOWS_SIGNING" = "certificate" ]; then
+              echo "- Windows installer: signed with the project's code-signing certificate."
+            else
+              echo "- Windows installer: signed with a **self-signed** certificate, so Windows SmartScreen will warn that the publisher is unknown. Choose **More info -> Run anyway** to install."
+            fi
+            if [ "$ANDROID_SIGNING" = "certificate" ]; then
+              echo "- Android APK: signed with the project's release key."
+            else
+              echo "- Android APK: signed with a **temporary key generated for this build**. A later version signed with a different key cannot update it in place: uninstall first (export your data from the app before you do)."
+            fi
+            echo ""
+            echo "Verify downloads against \`SHA256SUMS.txt\`."
+          } >> "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.web.outputs.version }}
+          TITLE: ${{ inputs.title || format('Deep Tutor Pro {0}', needs.web.outputs.version) }}
+          REPLACE: ${{ inputs.replace || false }}
+          PRERELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.prerelease) || (github.event_name == 'push' && contains(github.ref_name, '-')) }}
+        run: |
+          if [ "$TAG" = "v1.6.14" ]; then
+            echo "::error::Refusing to touch the v1.6.14 release"; exit 1
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "$REPLACE" != "true" ]; then
+              echo "::error::Release $TAG already exists. Re-run with 'replace' ticked to replace it."; exit 1
+            fi
+            echo "Deleting the existing $TAG release (replace requested)"
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              # Also drop the old tag so the new release points at this commit.
+              gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+            else
+              # A pushed tag is kept: the release is rebuilt for that tag.
+              gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          fi
+          args=(--repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" --target "$GITHUB_SHA")
+          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+          gh release create "$TAG" "${args[@]}" \
+            "release-assets/Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe" \
+            "release-assets/Deep-Tutor-Pro-$APP_VERSION-Android.apk" \
+            "release-assets/deep-tutor-pro-web-$APP_VERSION.zip" \
+            release-assets/SHA256SUMS.txt
+          {
+            echo "### Released $TAG"
+            echo ""
+            echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"

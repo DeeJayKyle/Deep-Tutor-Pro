@@ -1,58 +1,54 @@
-# DeepTutor — React Web Application
+# Deep Tutor Pro
 
-DeepTutor is an agent-native intelligent learning companion rewritten as a modern React and TypeScript application. It connects tutoring, multi-stage problem solving, Bloom-aligned question generation, dynamic research literature reviews, mathematical visualizations, mastery tracking, and the Tutor Companion suite.
+**From curriculum to marks sheet — one app for lecturers.** Import a full curriculum or teacher’s guide (for example *Diploma in Pharmacy* or *Certificate in Pharmacy*) and Deep Tutor Pro builds the classes, course units, outlines, learning objectives and contact hours. Then write lecture notes by contact hour from your own references, set exams and coursework with marking schemes, keep a question bank with solutions, record students’ biodata and marks by year of study, and solve any question with Deep Solve.
 
-## Architecture
+Windows · Android · Web — works offline, syncs when online.
 
-The system is organized around DeepTutor's two-layer plugin architecture:
+## What it does
 
-### Level 1 — Single-Shot Tools
-- `web_search`: Real-time web retrieval with citations
-- `paper_search`: arXiv preprint search for academic proofs
-- `reason`: Dedicated deep-reasoning chain-of-thought exploration
-- `brainstorm`: Breadth-first idea exploration with rationale
-- `geogebra_analysis`: Analyze math & geometry into GeoGebra
-- `imagegen`: Generate concept illustrations & charts
-- `rag`: Retrieve context from attached knowledge bases
+| Area | Features |
+| --- | --- |
+| **Curriculum** | Upload a curriculum (PDF, scanned PDF, Word, PowerPoint, photos). AI analysis finds the programme, years, semesters, course units, credits and contact hours; you review and edit before anything is created. A class is made for each year of study. Each unit’s topics, contact hours and learning objectives are extracted in the background. |
+| **Classes & units** | Fully editable outlines: topics with contact-hour numbering (Hours 1–6, 7–21…), objectives, subtopics, practicals, aims, outcomes, teaching methods, references. |
+| **Reference library** | Textbooks, guidelines, past papers, slides and photos. Text is read on the device: PDF text layer, OCR for scanned pages and images (Tesseract), Word, PowerPoint, Excel, OpenDocument, HTML, RTF. Link references to units. |
+| **Lecture notes** | Generated per topic, organised by contact hours and grounded in the unit’s references (`[Source: S#]` tags). Edit side by side, revise with AI (with undo), approve as final. Export to **Word, PDF, PowerPoint**, or an AI-condensed slide deck. |
+| **Exams & coursework** | Exams, CATs, assignments, quizzes, practicals. Choose the topics and the format — standard (MCQ + short answer + long essay), CAT, assignment, or your own sections — or upload a reference exam and copy its format and style. Every question has a marking scheme and model answer. Export the paper and the marking scheme to Word or PDF. |
+| **Question bank** | Questions with worked solutions per unit and topic: AI-generated, collected from papers, or your own. Build papers from the bank; export with or without answers. |
+| **Students & marks** | Classes by year of study, full biodata, import/export class lists (Excel/CSV), marks per course unit for each assessment component (CATs, assignments, practicals, exam) with configurable weights and grade bands, rankings, statistics, results summaries, GPA and transcripts. Promote a class to the next year. |
+| **Deep Solve** | Step-by-step solutions from typed questions, photos of questions, attached documents or voice notes; explain mode; script-marking mode. Save answers as notes. |
+| **Tutor chat & Deep Research** | DeepTutor’s agents with web search and your knowledge bases; multi-step research reports with sources; real articles, images and videos (OpenAlex, arXiv, Wikimedia Commons, YouTube). |
+| **Knowledge bases** | Turn library documents into searchable knowledge bases on your DeepTutor server. |
+| **Sync & backup** | Everything is stored on the device (IndexedDB). Signed in, it syncs to your private cloud copy; edits from two devices are reviewed and combined, never silently overwritten; earlier cloud versions can be restored. Backup files carry a SHA-256 checksum. |
 
-### Level 2 — Multi-Stage Capabilities
-- **Tutor Chat**: Agentic Socratic dialogue with collapsible reasoning thought traces, tool execution badges, and grounding citations
-- **Deep Solve**: Multi-stage formal mathematical & conceptual solver (Invariant Analysis → Decomposition → Scratchpad Derivation → Verification)
-- **Deep Question**: Bloom taxonomy-aligned question generator (quizzes, exam problems, and conceptual probes) with direct sync to the Question Bank
-- **Deep Research**: Multi-source dynamic topic queue scheduler with synthesized executive findings and real preprint citations (arXiv, OpenAlex)
-- **Visualize**: Interactive architecture diagrams, singular value scree plots, and ill-conditioned loss contours
-- **Math Animator**: Real-time Fourier series square-wave synthesis canvas with odd harmonic basis functions and playback controls
-- **Mastery Path**: Guided curriculum tree, prerequisite gating, skill competency radar, and milestone challenges
-- **Immersive Reading**: Split-screen document (PDF/EPUB) and video reader with timestamped grounded notes and citation Q&A
-- **Co-Writer**: Academic paper drafting workbench with outline navigation, AI edit agent, and Markdown export
+Hyperlinks connect everything: a topic links to its notes and bank questions, a paper to its unit and marks sheet, a student to their marks, and so on.
 
-### Learning Spaces & Tools
-- **Task Board**: Workspace Kanban board (To Do, In Progress, Done) with priority tags and move controls
-- **Question Bank & Notebook**: Curated question repository with interactive Practice Test mode, live grading, and explanations
-- **Three-Layer Memory Workbench**: Inspectable memory graph connecting Layer 1 (Episodic Traces), Layer 2 (Learner Traits), and Layer 3 (Cognitive Synthesis)
-- **Knowledge Center**: Multi-engine knowledge base manager (LightRAG, LlamaIndex, PageIndex, Obsidian) with document viewer and RAG chunk retrieval tester
-- **Partners & Subagents**: Roster of autonomous tutor companions across Slack, Discord, Telegram, and CLI with a live interactive chat simulator
-- **Tutor Companion**: Academic class manager, teaching materials generator (lecture notes, exam papers, marking guides), real index research lookup, and offline backups with SHA-256 verification
-- **Settings & Doctor Diagnostic**: Model provider picker, reasoning effort gating, and `deeptutor doctor` readiness audits
+## AI and the server
 
-## Running the App
+AI runs on your **DeepTutor server** ([DeeJayKyle/DeepTutor](https://github.com/DeeJayKyle/DeepTutor), `/api/tutorpro`), which holds the API keys — the apps never see them. Gemini is used by default and OpenAI as soon as `OPENAI_API_KEY` is set on the server; switch in **Settings › AI provider**. Sign in under **Settings › Account & server** (default server: `https://tutor-companion.djrileykyle.workers.dev`). The web app is also served from that address at `/pro/`.
+
+Without signing in, everything except AI, knowledge bases and cloud sync works on the device. AI output is always marked as a draft until you approve it.
+
+## Development
+
+Node.js 22.
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run dev          # http://localhost:3000
+npm run lint         # TypeScript
+npm test             # Vitest unit tests
+npm run build
+npm run test:e2e     # Playwright, desktop + phone (set PW_CHROMIUM to use a pre-installed Chromium)
+python3 scripts/check_workspace_hygiene.py
 ```
 
-The application runs on Vite on port 3000.
+- `src/lib/` — engines: data model and migration, extraction/OCR, exporters, grading, curriculum, papers, sync, server client.
+- `src/state/` — workspace store (IndexedDB, autosave, sync), router, background AI jobs.
+- `src/views/`, `src/ui/` — screens and components.
+- `e2e/` — end-to-end tests with a fake DeepTutor server and real PDF/Word fixtures (`scripts/make_fixtures.py`, `scripts/make_docx_fixture.mjs`).
+- `packaging/windows` (Electron, `app://tutor-pro`), `packaging/android` (Capacitor).
+- `.github/workflows/ci.yml` (checks) and `release.yml` (Windows installer, Android APK, web zip, GitHub release).
 
-## Current implementation and verification
+## Licence
 
-This checkout is a React application with local device storage. AI generation, research,
-OCR and integrations are demonstrations; no live provider/backend or automatic cloud
-sync is connected. See [the review](CODE_REVIEW.md) for repaired defects and remaining work.
-
-Use Node.js 22 and `npm ci`. Run `npm run lint`, `npm test`, and `npm run build`.
-For desktop/mobile browser checks, run `npx playwright install chromium` then
-`npm run test:e2e`. Settings supports complete JSON backup export and validated restore.
-The [v1.6.14 release](https://github.com/DeeJayKyle/Deep-Tutor-Pro/releases/tag/v1.6.14)
-contains unsigned Windows and debug-signed Android test installers. New main-branch fixes
-are not present in those older release assets until a new package is built and published.
+Apache-2.0. See `THIRD_PARTY_NOTICES.md` for bundled libraries.

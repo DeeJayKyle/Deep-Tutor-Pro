@@ -1,13 +1,12 @@
 # Deep Tutor Pro development
 
-This repository is a React 19 / TypeScript / Vite application. There is no Python tutor backend, WebSocket service, CLI, RAG engine, or cloud synchronization in this checkout. Do not assume those services exist from upstream DeepTutor documentation.
+React 19 / TypeScript / Vite 6 / Tailwind 4 app for Windows (Electron), Android (Capacitor) and the web. AI, knowledge bases and cloud sync are provided by the DeepTutor server (`/api/tutorpro`, `/api/companion`, `/api/knowledge-bases` in DeeJayKyle/DeepTutor); everything else runs on the device.
 
-- Source: `src/`; state persistence: `src/services/storage.ts`.
-- Runtime backup validators: `src/services/schemas.ts`, generated from `src/types/index.ts` using `npm run schemas`.
-- Tests: `tests/` (Vitest), `e2e/` (Playwright desktop and mobile).
-- Native wrappers: `packaging/windows` (Electron), `packaging/android` (Capacitor).
+- Data model: `src/lib/model.ts`; tolerant loader and 1.x migration: `src/lib/workspace.ts` (`normalizeWorkspace`, `migrateLegacy`). Storage: IndexedDB via `src/lib/db.ts`, store in `src/state/store.ts`.
+- Server client: `src/lib/api.ts` (bearer token from `/api/tutorpro/auth/login`). Sync: `src/lib/sync.ts` (revisioned cloud copy, conflict review, merge).
+- Tests: `tests/` (Vitest), `e2e/` (Playwright desktop and mobile, fake server in `e2e/fake-server.ts`).
 - Validate changes with `npm ci`, `npm run lint`, `npm test`, `npm run build`, `npm run test:e2e`, and `python3 scripts/check_workspace_hygiene.py`.
-- Use a task branch/worktree; preserve existing user changes. Do not commit generated build output, installed dependencies, signing keys, or personal workspace data.
-- Preserve saved data compatibility. Add regression tests for data loss, malformed imports, calculations, and crashes.
-- Never label simulated AI, retrieval, OCR, diagnostics, signatures, or downloads as real. Keep demo limitations explicit.
-- Installer builds are unsigned Windows and debug-signed Android test packages until signing is configured. Do not overwrite a published release as part of routine tests.
+- Use a task branch; preserve existing user changes. Do not commit generated build output, installed dependencies, signing keys, `public/vendor/` (copied by `scripts/vendor-assets.mjs`) or personal workspace data.
+- Preserve saved data compatibility: every saved/synced/restored workspace passes through `normalizeWorkspace`. Add regression tests for data loss, malformed imports, calculations, and crashes.
+- Never label AI output as reviewed or final until the tutor approves it; never present simulated results as real. API keys must never reach the client.
+- Releases: `release.yml` builds and publishes; never overwrite a published release (v1.6.14 is protected) as part of routine tests.

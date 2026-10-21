@@ -51,9 +51,8 @@ export interface PaperContext {
 export function paperToMarkdown(p: Paper, ctx: PaperContext, mode: 'paper' | 'scheme'): string {
   const out: string[] = [];
   const unit = ctx.unit ? `${ctx.unit.code ? ctx.unit.code + ' — ' : ''}${ctx.unit.title}` : '';
-  if (mode === 'scheme') out.push('# Marking scheme', '');
   out.push(
-    `| | |`,
+    `| Paper | Details |`,
     `|---|---|`,
     ...(ctx.programme ? [`| Programme | ${ctx.programme} |`] : []),
     ...(unit ? [`| Course unit | ${unit} |`] : []),

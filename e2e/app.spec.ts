@@ -111,6 +111,7 @@ test('lecture notes are generated per topic, edited, and exported to Word, PDF a
     await page.getByRole('button', { name: button, exact: true }).click();
     const file = await download;
     expect(file.suggestedFilename()).toMatch(new RegExp(`\\.${ext}$`));
+    if (process.env.SAVE_EXPORTS) await file.saveAs(`${process.env.SAVE_EXPORTS}/notes.${ext}`);
     const bytes = readFileSync((await file.path())!);
     expect(bytes.subarray(0, magic.length).toString('latin1')).toBe(magic);
   }
@@ -145,6 +146,7 @@ test('exams follow a reference paper format and export with a marking scheme', a
   await page.locator('aside').getByRole('button', { name: 'Word' }).nth(1).click();
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/marking-scheme\.docx$/);
+  if (process.env.SAVE_EXPORTS) await file.saveAs(`${process.env.SAVE_EXPORTS}/scheme.docx`);
 
   // Questions went to the bank too.
   await page.goto('/#/bank');

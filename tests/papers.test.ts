@@ -101,7 +101,7 @@ describe('paperToMarkdown', () => {
 
   it('scheme mode shows answers and marking points but not the option list', () => {
     const md = paperToMarkdown(paper, ctx, 'scheme');
-    expect(md.startsWith('# Marking scheme')).toBe(true);
+    expect(md.startsWith('| Paper | Details |')).toBe(true);
     expect(md).toContain('**Answer: A.** Paracetamol');
     expect(md).toContain('**Answer:** The art and science of preparing drugs');
     expect(md).toContain('| Marking point | Marks |');

@@ -98,10 +98,18 @@ export async function saveBlob(blob: Blob, filename: string): Promise<SaveResult
 
 export const fileName = (title: string | undefined, ext: string) => `${slugify(title || 'document') || 'document'}.${ext}`;
 
-function footerText(meta: DocMeta): string {
-  return [meta.institution, meta.subtitle, meta.status === 'final' ? '' : 'DRAFT', meta.aiAssisted ? 'AI-assisted, reviewed by tutor' : '']
+export function footerText(meta: DocMeta): string {
+  return [meta.institution, meta.subtitle, meta.status === 'final' ? 'Reviewed by tutor' : 'DRAFT — not yet reviewed', meta.aiAssisted ? 'AI-assisted' : '']
     .filter(Boolean)
     .join(' · ');
+}
+
+/** Drop a leading "# Title" that repeats the document title shown above it. */
+export function withoutRepeatedTitle(markdown: string, title?: string): string {
+  if (!title) return markdown;
+  const m = /^\s*#\s+(.+?)\s*(?:\n|$)/.exec(markdown);
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return m && norm(m[1]) === norm(title) ? markdown.slice(m[0].length) : markdown;
 }
 
 // ---------------------------------------------------------------- DOCX ----
@@ -129,7 +137,7 @@ export async function exportDocx(markdown: string, meta: DocMeta = {}): Promise<
   if (meta.title) children.push(new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(meta.title)] }));
   if (meta.subtitle) children.push(new Paragraph({ children: [new TextRun({ text: meta.subtitle, italics: true, color: '555555' })], spacing: { after: 200 } }));
   let listCounter = 0;
-  for (const b of parseMarkdown(markdown)) {
+  for (const b of parseMarkdown(withoutRepeatedTitle(markdown, meta.title))) {
     if (b.type === 'heading') children.push(new Paragraph({ heading: levels[b.level - 1], children: runsFor(b.text) }));
     else if (b.type === 'para') children.push(new Paragraph({ children: runsFor(b.text), spacing: { after: 120 } }));
     else if (b.type === 'list') {
@@ -365,7 +373,7 @@ export async function exportPdf(markdown: string, meta: DocMeta = {}): Promise<B
   if (meta.title) write(meta.title, { size: 20, style: 'bold', color: [31, 78, 121], gap: 4 });
   if (meta.subtitle) write(meta.subtitle, { size: 10, style: 'italic', color: [90, 90, 90], gap: 14 });
   const sizes = [18, 15, 13, 12, 11, 11];
-  for (const b of parseMarkdown(markdown)) {
+  for (const b of parseMarkdown(withoutRepeatedTitle(markdown, meta.title))) {
     if (b.type === 'heading') {
       y += 6;
       ensure(40);

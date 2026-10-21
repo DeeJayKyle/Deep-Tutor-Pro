@@ -48,7 +48,9 @@ describe('exportDocx', () => {
     expect(footer.length).toBeGreaterThan(0);
     const footerXml = await zip.file(footer[0])!.async('string');
     expect(footerXml).toContain('DRAFT');
-    expect(footerXml).toContain('AI-assisted, reviewed by tutor');
+    expect(footerXml).toContain('DRAFT — not yet reviewed');
+    expect(footerXml).toContain('AI-assisted');
+    expect(footerXml).not.toContain('Reviewed by tutor');
     // and our own reader can read it back
     const back = await extractFile(new File([await bytes(blob)], 'x.docx'));
     expect(back.text).toContain('Pain management');

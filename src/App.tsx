@@ -1,362 +1,295 @@
-import React, { useState, useEffect } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
-import { ChatCapability } from './components/capabilities/ChatCapability';
-import { DeepSolveCapability } from './components/capabilities/DeepSolveCapability';
-import { DeepQuestionCapability } from './components/capabilities/DeepQuestionCapability';
-import { DeepResearchCapability } from './components/capabilities/DeepResearchCapability';
-import { VisualizeCapability } from './components/capabilities/VisualizeCapability';
-import { MathAnimatorCapability } from './components/capabilities/MathAnimatorCapability';
-import { MasteryPathCapability } from './components/capabilities/MasteryPathCapability';
-import { ReadingCapability } from './components/capabilities/ReadingCapability';
-import { CoWriterCapability } from './components/capabilities/CoWriterCapability';
-import { TaskBoardView } from './components/space/TaskBoardView';
-import { QuestionBankView } from './components/space/QuestionBankView';
-import { MemoryGraphView } from './components/space/MemoryGraphView';
-import { KnowledgeBasesView } from './components/space/KnowledgeBasesView';
-import { PartnersView } from './components/space/PartnersView';
-import { TutorCompanionView } from './components/companion/TutorCompanionView';
-import { SettingsModal } from './components/settings/SettingsModal';
-import { ClientReleaseHub } from './components/release/ClientReleaseHub';
-
-// Curriculum & Academic Engineering Views
-import { CurriculumManagerView } from './components/curriculum/CurriculumManagerView';
-import { LectureNotesView } from './components/curriculum/LectureNotesView';
-import { AssessmentBuilderView } from './components/curriculum/AssessmentBuilderView';
-import { StudentLedgerView } from './components/curriculum/StudentLedgerView';
-import { ReferenceLibraryView } from './components/curriculum/ReferenceLibraryView';
-
-import { StorageService } from './services/storage';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import {
-  CapabilityType,
-  BuiltinTool,
-  ChatMessage,
-  TaskItem,
-  QuestionItem,
-  MemoryTrace,
-  KnowledgeBase,
-  AcademicClass,
-  TeachingDraft,
-  PartnerAgent,
-  ProviderConfig,
-  CurriculumPackage,
-  LectureNoteBlock,
-  AssessmentPaper,
-  StudentBiodata,
-  StudentMarkRecord,
-  ReferenceDocument
-} from './types';
+  BookOpen,
+  BrainCircuit,
+  ClipboardList,
+  Cloud,
+  CloudOff,
+  Database,
+  FileText,
+  GraduationCap,
+  Home,
+  Library,
+  ListChecks,
+  Menu,
+  RefreshCw,
+  Search,
+  Settings as SettingsIcon,
+  Sparkles,
+  Users,
+  X,
+} from 'lucide-react';
+import { useRoute, href } from './state/router';
+import { loadWorkspace, onSessionChanged, runSync, store, useSaveError, useSyncStatus, useWorkspace } from './state/store';
+import { adoptCookieSession, getSession, loadSession, onSession } from './lib/api';
+import { Button, Spinner, UiProvider, cx } from './ui/kit';
+import { ConflictDialog } from './views/ConflictDialog';
 
-export const App: React.FC = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<CapabilityType>('curriculum');
-  const [selectedUnitId, setSelectedUnitId] = useState<string | undefined>(undefined);
+const HomeView = lazy(() => import('./views/Home'));
+const CurriculumView = lazy(() => import('./views/Curriculum'));
+const UnitsView = lazy(() => import('./views/Units'));
+const LibraryView = lazy(() => import('./views/Library'));
+const NotesView = lazy(() => import('./views/Notes'));
+const AssessmentsView = lazy(() => import('./views/Assessments'));
+const BankView = lazy(() => import('./views/Bank'));
+const SolveView = lazy(() => import('./views/Solve'));
+const ResearchView = lazy(() => import('./views/Research'));
+const KnowledgeView = lazy(() => import('./views/Knowledge'));
+const StudentsView = lazy(() => import('./views/Students'));
+const SettingsView = lazy(() => import('./views/Settings'));
 
-  // Curriculum & Academic Engineering State
-  const [curriculum, setCurriculum] = useState<CurriculumPackage | null>(() => StorageService.getCurriculumPackage());
-  const [lectureNotes, setLectureNotes] = useState<LectureNoteBlock[]>(() => StorageService.getLectureNotes());
-  const [assessments, setAssessments] = useState<AssessmentPaper[]>(() => StorageService.getAssessments());
-  const [students, setStudents] = useState<StudentBiodata[]>(() => StorageService.getStudents());
-  const [marks, setMarks] = useState<StudentMarkRecord[]>(() => StorageService.getMarks());
-  const [referenceDocs, setReferenceDocs] = useState<ReferenceDocument[]>(() => StorageService.getReferences());
+import { APP_VERSION } from './lib/version';
 
-  // DeepTutor Learning Companion State
-  const [messages, setMessages] = useState<ChatMessage[]>(() => StorageService.getMessages());
-  const [tasks, setTasks] = useState<TaskItem[]>(() => StorageService.getTasks());
-  const [questions, setQuestions] = useState<QuestionItem[]>(() => StorageService.getQuestions());
-  const [memoryTraces, setMemoryTraces] = useState<MemoryTrace[]>(() => StorageService.getMemory());
-  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>(() => StorageService.getKnowledgeBases());
-  const [classes, setClasses] = useState<AcademicClass[]>(() => StorageService.getClasses());
-  const [drafts, setDrafts] = useState<TeachingDraft[]>(() => StorageService.getDrafts());
-  const [partners, setPartners] = useState<PartnerAgent[]>(() => StorageService.getPartners());
-  const [providers, setProviders] = useState<ProviderConfig[]>(() => StorageService.getProviders());
-  const [selectedTools, setSelectedTools] = useState<string[]>(() => StorageService.getSelectedTools());
-  const [currentWorkspace, setCurrentWorkspace] = useState<string>(() => StorageService.getCurrentWorkspace());
-  const [activeModel, setActiveModel] = useState<string>('Demo — no AI connected');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isReleaseHubOpen, setIsReleaseHubOpen] = useState(false);
-  const [isChatLoading, setIsChatLoading] = useState(false);
+const NAV = [
+  { to: '/', label: 'Home', icon: Home, group: '' },
+  { to: '/curriculum', label: 'Curriculum', icon: GraduationCap, group: 'Plan' },
+  { to: '/units', label: 'Classes & units', icon: BookOpen, group: 'Plan' },
+  { to: '/library', label: 'Reference library', icon: Library, group: 'Plan' },
+  { to: '/notes', label: 'Lecture notes', icon: FileText, group: 'Teach' },
+  { to: '/assessments', label: 'Exams & coursework', icon: ClipboardList, group: 'Assess' },
+  { to: '/bank', label: 'Question bank', icon: ListChecks, group: 'Assess' },
+  { to: '/students', label: 'Students & marks', icon: Users, group: 'Assess' },
+  { to: '/solve', label: 'Deep Solve', icon: BrainCircuit, group: 'AI' },
+  { to: '/research', label: 'Tutor chat & research', icon: Search, group: 'AI' },
+  { to: '/knowledge', label: 'Knowledge bases', icon: Database, group: 'AI' },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon, group: 'App' },
+];
 
-  const [storageFailed, setStorageFailed] = useState(false);
+const MOBILE_NAV = ['/', '/units', '/notes', '/solve', '/students'];
+
+function routeView(first: string | undefined): React.ReactNode {
+  switch (first) {
+    case undefined:
+      return <HomeView />;
+    case 'curriculum':
+    case 'programmes':
+      return <CurriculumView />;
+    case 'units':
+    case 'classes':
+      return <UnitsView />;
+    case 'library':
+      return <LibraryView />;
+    case 'notes':
+      return <NotesView />;
+    case 'assessments':
+      return <AssessmentsView />;
+    case 'bank':
+      return <BankView />;
+    case 'solve':
+      return <SolveView />;
+    case 'research':
+      return <ResearchView />;
+    case 'knowledge':
+      return <KnowledgeView />;
+    case 'students':
+      return <StudentsView />;
+    case 'settings':
+      return <SettingsView />;
+    default:
+      return (
+        <div className="p-8 text-center text-muted">
+          This page does not exist. <a className="text-accent" href="#/">Go home</a>
+        </div>
+      );
+  }
+}
+
+function useOnline() {
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   useEffect(() => {
-    const report = () => setStorageFailed(true);
-    window.addEventListener('deeptutor-storage-error', report);
-    return () => window.removeEventListener('deeptutor-storage-error', report);
-  }, []);
-
-  // Sync state to local storage for online/offline durability
-  useEffect(() => { StorageService.setCurriculumPackage(curriculum); }, [curriculum]);
-  useEffect(() => { StorageService.setLectureNotes(lectureNotes); }, [lectureNotes]);
-  useEffect(() => { StorageService.setAssessments(assessments); }, [assessments]);
-  useEffect(() => { StorageService.setStudents(students); }, [students]);
-  useEffect(() => { StorageService.setMarks(marks); }, [marks]);
-  useEffect(() => { StorageService.setReferences(referenceDocs); }, [referenceDocs]);
-  useEffect(() => { StorageService.setMessages(messages); }, [messages]);
-  useEffect(() => { StorageService.setTasks(tasks); }, [tasks]);
-  useEffect(() => { StorageService.setQuestions(questions); }, [questions]);
-  useEffect(() => { StorageService.setMemory(memoryTraces); }, [memoryTraces]);
-  useEffect(() => { StorageService.setKnowledgeBases(knowledgeBases); }, [knowledgeBases]);
-  useEffect(() => { StorageService.setClasses(classes); }, [classes]);
-  useEffect(() => { StorageService.setDrafts(drafts); }, [drafts]);
-  useEffect(() => { StorageService.setPartners(partners); }, [partners]);
-  useEffect(() => { StorageService.setSelectedTools(selectedTools); }, [selectedTools]);
-  useEffect(() => { StorageService.setCurrentWorkspace(currentWorkspace); }, [currentWorkspace]);
-
-  // Handle loading pre-configured pharmacy curriculum sample
-  const handleLoadSamplePharmacy = () => {
-    StorageService.loadSamplePharmacyCurriculum();
-    setCurriculum(StorageService.getCurriculumPackage());
-    setLectureNotes(StorageService.getLectureNotes());
-    setAssessments(StorageService.getAssessments());
-    setStudents(StorageService.getStudents());
-    setMarks(StorageService.getMarks());
-    setReferenceDocs(StorageService.getReferences());
-    if (StorageService.getCurriculumPackage()?.courseUnits[0]) {
-      setSelectedUnitId(StorageService.getCurriculumPackage()?.courseUnits[0].id);
-    }
-  };
-
-  // Inter-tab hyperlink navigation handler
-  const handleNavigateTo = (tab: CapabilityType, contextId?: string) => {
-    if (contextId) {
-      setSelectedUnitId(contextId);
-    }
-    setActiveTab(tab);
-  };
-
-  // Tool toggle handler
-  const handleToggleTool = (tool: BuiltinTool) => {
-    setSelectedTools((prev) =>
-      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
-    );
-  };
-
-  // Chat message sending with simulated agentic reasoning & tool execution
-  const handleSendMessage = (text: string) => {
-    const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: text,
-      capability: activeTab,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
     };
+  }, []);
+  return online;
+}
 
-    setMessages((prev) => [...prev, userMsg]);
-    setIsChatLoading(true);
+function SyncBadge() {
+  const s = useSyncStatus();
+  const online = useOnline();
+  const signedIn = !!getSession();
+  if (!online)
+    return (
+      <span className="flex items-center gap-1.5 rounded-full bg-warn/15 px-2.5 py-1 text-xs text-warn" title="Everything keeps working; AI and sync resume when you reconnect.">
+        <CloudOff className="h-3.5 w-3.5" /> Offline
+      </span>
+    );
+  if (!signedIn)
+    return (
+      <a href={href('/settings')} className="flex items-center gap-1.5 rounded-full bg-panel2 px-2.5 py-1 text-xs text-muted hover:text-ink">
+        <CloudOff className="h-3.5 w-3.5" /> Sign in for AI & sync
+      </a>
+    );
+  return (
+    <button
+      onClick={() => void runSync()}
+      title={s.lastSynced ? `Last synced ${new Date(s.lastSynced).toLocaleString()}` : 'Sync now'}
+      className={cx(
+        'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs',
+        s.state === 'error' ? 'bg-bad/15 text-bad' : s.state === 'conflict' ? 'bg-warn/15 text-warn' : 'bg-good/10 text-good',
+      )}
+    >
+      {s.state === 'syncing' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />}
+      <span className="max-w-[12rem] truncate">{s.state === 'syncing' ? 'Syncing…' : s.message || 'Cloud sync on'}</span>
+    </button>
+  );
+}
 
-    setMessages(prev => [...prev, {
-      id: crypto.randomUUID(), role: 'assistant',
-      content: 'No AI provider is connected in this build. Your message has been saved locally. The example tools show sample content and do not perform live research, clinical validation, or model inference.',
-      capability: activeTab, timestamp: new Date().toLocaleTimeString()
-    }]);
-    setIsChatLoading(false);
-  };
+function Shell() {
+  const route = useRoute();
+  const ws = useWorkspace();
+  const saveError = useSaveError();
+  const [menu, setMenu] = useState(false);
+  const active = '/' + (route.parts[0] ?? '');
+  const isActive = (to: string) => (to === '/' ? active === '/' : active === to || (to === '/units' && active === '/classes') || (to === '/curriculum' && active === '/programmes'));
 
-  const handleExportSession = () => {
-    const text = messages
-      .map((m) => `### ${m.role.toUpperCase()} (${m.timestamp})\n\n${m.content}\n\n---\n`)
-      .join('\n');
-    const blob = new Blob([text], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `deeptutor_session_${Date.now()}.md`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
+  useEffect(() => setMenu(false), [route.path]);
 
-  const handleClearSession = () => {
-    if (confirm('Clear current chat conversation?')) {
-      setMessages([]);
-    }
-  };
+  // Theme
+  useEffect(() => {
+    const apply = () => {
+      const dark = ws.settings.theme === 'dark' || (ws.settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('light', !dark);
+    };
+    apply();
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, [ws.settings.theme]);
 
-  // Course units list from active curriculum
-  const courseUnitsList = curriculum?.courseUnits || [];
+  const nav = (
+    <nav aria-label="Main" className="flex flex-col gap-0.5 p-3">
+      {NAV.map((item, i) => {
+        const Icon = item.icon;
+        const showGroup = item.group && item.group !== NAV[i - 1]?.group;
+        return (
+          <React.Fragment key={item.to}>
+            {showGroup && <div className="mt-3 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">{item.group}</div>}
+            <a
+              href={href(item.to)}
+              aria-current={isActive(item.to) ? 'page' : undefined}
+              className={cx('flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition', isActive(item.to) ? 'bg-accent/15 font-medium text-accent' : 'text-ink/85 hover:bg-panel2')}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {item.label}
+            </a>
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#090d16] font-sans text-slate-100">
-      {/* Sidebar Navigation */}
-      <div className={`${menuOpen ? "block" : "hidden"} md:block fixed md:static inset-y-0 left-0 z-40`}>
-      <Sidebar
-        activeTab={activeTab}
-        onSelectTab={(tab) => {
-          setActiveTab(tab);
-          setMenuOpen(false);
-        }}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenReleaseHub={() => setIsReleaseHubOpen(true)}
-        activeModel={activeModel}
-      />
+    <div className="flex h-full">
+      <aside className="no-print hidden w-60 shrink-0 flex-col border-r border-line bg-panel lg:flex">
+        <a href="#/" className="flex items-center gap-2 border-b border-line px-5 py-4 no-underline">
+          <Sparkles className="h-5 w-5 text-accent" />
+          <div>
+            <div className="font-bold leading-tight">Deep Tutor Pro</div>
+            <div className="text-[10px] text-muted">Version {APP_VERSION}</div>
+          </div>
+        </a>
+        <div className="flex-1 overflow-y-auto">{nav}</div>
+      </aside>
 
-      </div>
-      {menuOpen && <button aria-label="Close navigation" className="md:hidden fixed inset-0 bg-black/60 z-30" onClick={() => setMenuOpen(false)} />}
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        <button className="md:hidden text-left p-3 bg-slate-800" aria-label="Open navigation" onClick={() => setMenuOpen(true)}>☰ Menu</button>
-        <Header
-          activeTab={activeTab}
-          selectedTools={selectedTools}
-          onToggleTool={handleToggleTool}
-          currentWorkspace={currentWorkspace}
-          onOpenReleaseHub={() => setIsReleaseHubOpen(true)}
-          onExportSession={activeTab === 'chat' ? handleExportSession : undefined}
-          onClearSession={activeTab === 'chat' ? handleClearSession : undefined}
-        />
-
-        <div role="status" className="px-4 py-2 text-xs bg-amber-950 text-amber-200">
-          Local workspace · AI, research, OCR and generated teaching content are demonstrations. No live provider or cloud sync is connected.
+      {menu && (
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMenu(false)}>
+          <aside className="h-full w-72 overflow-y-auto border-r border-line bg-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <span className="font-bold">Deep Tutor Pro</span>
+              <button aria-label="Close menu" onClick={() => setMenu(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {nav}
+          </aside>
         </div>
-        {storageFailed && <div role="alert" className="p-3 bg-red-950 text-red-200">Changes could not be saved to this device. Export a backup before closing the app.</div>}
-        {/* View Routing */}
-        <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* 1. Institutional Curriculum & Course Units */}
-          {activeTab === 'curriculum' && (
-            <CurriculumManagerView
-              curriculum={curriculum}
-              onUpdateCurriculum={setCurriculum}
-              onLoadSample={handleLoadSamplePharmacy}
-              onNavigateTo={handleNavigateTo}
-            />
-          )}
+      )}
 
-          {/* 2. Lecture Notes Generator & Slide Outline */}
-          {activeTab === 'lecture_notes' && (
-            <LectureNotesView
-              lectureNotes={lectureNotes}
-              courseUnits={courseUnitsList}
-              referenceDocs={referenceDocs}
-              onUpdateNotes={setLectureNotes}
-              selectedUnitId={selectedUnitId}
-              onNavigateToUnit={(uid) => setSelectedUnitId(uid)}
-            />
-          )}
-
-          {/* 3. Assessment & 3-Tier Exam Builder */}
-          {activeTab === 'assessments' && (
-            <AssessmentBuilderView
-              assessments={assessments}
-              courseUnits={courseUnitsList}
-              referenceDocs={referenceDocs}
-              onUpdateAssessments={setAssessments}
-              selectedUnitId={selectedUnitId}
-              onSaveToQuestionBank={(newQ) => setQuestions((prev) => [newQ, ...prev])}
-            />
-          )}
-
-          {/* 4. Student Biodata & Academic Gradebook Ledger */}
-          {activeTab === 'students' && (
-            <StudentLedgerView
-              students={students}
-              marks={marks}
-              courseUnits={courseUnitsList}
-              onUpdateStudents={setStudents}
-              onUpdateMarks={setMarks}
-            />
-          )}
-
-          {/* 5. Reference Materials & Image Library */}
-          {activeTab === 'references' && (
-            <ReferenceLibraryView
-              referenceDocs={referenceDocs}
-              courseUnits={courseUnitsList}
-              onUpdateReferences={setReferenceDocs}
-            />
-          )}
-
-          {/* DeepTutor Capabilities */}
-          {activeTab === 'chat' && (
-            <ChatCapability
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              isLoading={isChatLoading}
-              activeModel={activeModel}
-              selectedTools={selectedTools}
-            />
-          )}
-
-          {activeTab === 'deep_solve' && <DeepSolveCapability />}
-
-          {activeTab === 'deep_question' && (
-            <DeepQuestionCapability
-              onSaveToQuestionBank={(newQ) => setQuestions((prev) => [newQ, ...prev])}
-            />
-          )}
-
-          {activeTab === 'deep_research' && <DeepResearchCapability />}
-
-          {activeTab === 'visualize' && <VisualizeCapability />}
-
-          {activeTab === 'math_animator' && <MathAnimatorCapability />}
-
-          {activeTab === 'mastery_path' && <MasteryPathCapability />}
-
-          {activeTab === 'reading' && <ReadingCapability />}
-
-          {activeTab === 'co_writer' && <CoWriterCapability />}
-
-          {activeTab === 'task_board' && (
-            <TaskBoardView tasks={tasks} onUpdateTasks={setTasks} />
-          )}
-
-          {activeTab === 'question_bank' && (
-            <QuestionBankView
-              questions={questions}
-              onToggleBookmark={(id) =>
-                setQuestions((prev) =>
-                  prev.map((q) => (q.id === id ? { ...q, bookmarked: !q.bookmarked } : q))
-                )
-              }
-            />
-          )}
-
-          {activeTab === 'memory_graph' && (
-            <MemoryGraphView
-              memoryTraces={memoryTraces}
-              onAddTrace={(tr) => setMemoryTraces((prev) => [tr, ...prev])}
-              onDeleteTrace={(id) =>
-                setMemoryTraces((prev) => prev.filter((m) => m.id !== id))
-              }
-            />
-          )}
-
-          {activeTab === 'knowledge_bases' && (
-            <KnowledgeBasesView
-              knowledgeBases={knowledgeBases}
-              onAddKB={(kb) => setKnowledgeBases((prev) => [kb, ...prev])}
-            />
-          )}
-
-          {activeTab === 'partners' && <PartnersView partners={partners} />}
-
-          {activeTab === 'companion' && (
-            <TutorCompanionView
-              classes={classes}
-              drafts={drafts}
-              onSaveDraft={(dr) => setDrafts((prev) => [dr, ...prev])}
-            />
-          )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="no-print flex items-center gap-2 border-b border-line bg-panel/80 px-3 py-2 backdrop-blur sm:px-5">
+          <button aria-label="Open menu" className="rounded-md p-1.5 hover:bg-panel2 lg:hidden" onClick={() => setMenu(true)}>
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="truncate text-sm font-semibold lg:hidden">Deep Tutor Pro</span>
+          <div className="ml-auto flex items-center gap-2">
+            <SyncBadge />
+          </div>
+        </header>
+        {saveError && <div className="no-print border-b border-bad/40 bg-bad/10 px-4 py-2 text-sm text-bad">{saveError}</div>}
+        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0" id="main">
+          <Suspense fallback={<div className="p-8"><Spinner label="Loading…" /></div>}>{routeView(route.parts[0])}</Suspense>
         </main>
+        <nav aria-label="Quick" className="no-print fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-panel lg:hidden">
+          {NAV.filter((n) => MOBILE_NAV.includes(n.to)).map((item) => {
+            const Icon = item.icon;
+            return (
+              <a key={item.to} href={href(item.to)} className={cx('flex flex-col items-center gap-0.5 py-2 text-[10px]', isActive(item.to) ? 'text-accent' : 'text-muted')}>
+                <Icon className="h-5 w-5" />
+                {item.label.split(' ')[0]}
+              </a>
+            );
+          })}
+        </nav>
       </div>
-
-      {/* Settings & Diagnostic Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        providers={providers}
-        activeModel={activeModel}
-        onSelectModel={setActiveModel}
-        currentWorkspace={currentWorkspace}
-        onSelectWorkspace={setCurrentWorkspace}
-        onResetData={StorageService.resetDefaults}
-      />
-
-      {/* Standalone Windows EXE & Android APK Client Release Center */}
-      <ClientReleaseHub
-        isOpen={isReleaseHubOpen}
-        onClose={() => setIsReleaseHubOpen(false)}
-      />
+      <ConflictDialog />
     </div>
   );
-};
-export default App;
+}
+
+export function App() {
+  const [ready, setReady] = useState(store.isLoaded());
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadSession();
+        await loadWorkspace();
+        if (cancelled) return;
+        setReady(true);
+        await adoptCookieSession();
+        onSessionChanged();
+      } catch (err) {
+        setError((err as Error).message || String(err));
+      }
+    })();
+    const off = onSession(() => onSessionChanged());
+    const online = () => void runSync();
+    window.addEventListener('online', online);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible' && store.get().settings.autoSync) void runSync();
+    }, 5 * 60_000);
+    return () => {
+      cancelled = true;
+      off();
+      window.removeEventListener('online', online);
+      clearInterval(timer);
+    };
+  }, []);
+
+  if (error)
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="font-semibold">Deep Tutor Pro could not open its storage.</p>
+        <p className="max-w-md text-sm text-muted">{error}</p>
+        <Button onClick={() => location.reload()}>Try again</Button>
+      </div>
+    );
+  if (!ready)
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner label="Opening your workspace…" />
+      </div>
+    );
+  return (
+    <UiProvider>
+      <Shell />
+    </UiProvider>
+  );
+}

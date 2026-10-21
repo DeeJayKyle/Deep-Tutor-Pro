@@ -74,7 +74,7 @@ async function loadPdfjs() {
 
 export async function readPdf(file: Blob, onProgress?: Progress, ocr = true): Promise<Extracted> {
   const pdfjs = await loadPdfjs();
-  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false });
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   const doc = await task.promise;
   const pages: string[] = [];
   const scanned: number[] = [];

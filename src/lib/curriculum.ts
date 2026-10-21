@@ -141,7 +141,8 @@ export function applyOutline(ws: Workspace, outline: Outline, opts: { referenceI
     updatedAt: t,
   };
   const short = shortProgrammeName(programme.title);
-  const years = new Set<number>([...outline.classes.map((c) => c.year), ...outline.units.map((u) => u.year)]);
+  // Units without a year are placed in year 1 (below), so never create a "Year 0" class for them.
+  const years = new Set<number>([...outline.classes.map((c) => c.year), ...outline.units.map((u) => u.year || 1)].filter((y) => y >= 1));
   for (let y = 1; y <= programme.durationYears; y += 1) years.add(y);
   const classes: ClassGroup[] = [...years]
     .sort((a, b) => a - b)

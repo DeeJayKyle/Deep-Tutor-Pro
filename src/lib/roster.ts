@@ -49,7 +49,7 @@ type Key = keyof Pick<
 > | 'fullName';
 
 const HEADERS: [RegExp, Key][] = [
-  [/^(reg(istration)?|adm(ission)?|index|student)\s*(no|number|#|id)?\.?$/, 'regNo'],
+  [/^(reg(istration)?|adm(ission)?|index|student)\.?\s*(no|number|#|id)?\.?$/, 'regNo'],
   [/^(full\s*)?names?$|^student\s*name$/, 'fullName'],
   [/^(first|given)\s*name|^forename/, 'firstName'],
   [/^(last|sur|family)\s*name|^surname$/, 'lastName'],

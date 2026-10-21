@@ -549,8 +549,10 @@ export function migrateLegacy(read: (key: string) => string | null): Workspace |
       const max: Record<string, number> = { cat1Score: 15, cat2Score: 15, assignmentScore: 10, finalExamScore: 100 };
       for (const m of arr(marks)) {
         for (const [field, comp] of map) {
-          if (m[field] === undefined) continue;
-          ws.marks.push({ id: uid('m-'), studentId: str(m.studentId), unitId: str(m.courseUnitId), componentId: comp, score: Math.round((num(m[field]) / max[field]) * 1000) / 10, remark: str(m.remarks), updatedAt: t });
+          // Blank or unreadable 1.x scores stay unentered; they must not become a 0 mark.
+          const raw = num(m[field], NaN);
+          if (!Number.isFinite(raw)) continue;
+          ws.marks.push({ id: uid('m-'), studentId: str(m.studentId), unitId: str(m.courseUnitId), componentId: comp, score: Math.round((raw / max[field]) * 1000) / 10, remark: str(m.remarks), updatedAt: t });
         }
       }
     }

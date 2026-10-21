@@ -144,7 +144,9 @@ export function formatTotal(f: Pick<ExamFormat, 'sections'>): number {
 }
 
 export function blankQuestion(type: QuestionType = 'short'): Question {
-  return normQuestion({ id: uid('q-'), type, prompt: '', options: type === 'mcq' ? ['', '', '', ''] : type === 'true_false' ? ['True', 'False'] : [], marks: type === 'mcq' || type === 'true_false' ? 1 : 5 });
+  const options = type === 'mcq' ? ['', '', '', ''] : type === 'true_false' ? ['True', 'False'] : [];
+  // normQuestion drops empty strings, so the blank MCQ option slots are set afterwards.
+  return { ...normQuestion({ id: uid('q-'), type, prompt: '', marks: type === 'mcq' || type === 'true_false' ? 1 : 5 }), options };
 }
 
 export function toBank(q: Question, unitId: string, source: BankQuestion['source'], topicId?: string): BankQuestion {

@@ -1,29 +1,105 @@
 @import "tailwindcss";
 
+/* Design tokens. Dark is the default; .light switches the palette. */
+@theme {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+}
+
+:root {
+  --bg: #0b0f19;
+  --panel: #111827;
+  --panel2: #1a2234;
+  --line: #273247;
+  --ink: #e8edf6;
+  --muted: #94a3b8;
+  --accent: #6d7cff;
+  --accent-ink: #ffffff;
+  --good: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  color-scheme: dark;
+}
+
+:root.light {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --panel2: #eef2f8;
+  --line: #d7deea;
+  --ink: #111827;
+  --muted: #5b6577;
+  --accent: #4f46e5;
+  --accent-ink: #ffffff;
+  --good: #059669;
+  --warn: #b45309;
+  --bad: #dc2626;
+  color-scheme: light;
+}
+
 @layer base {
   * {
-    border-color: #334155;
+    border-color: var(--line);
   }
-
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
-    background-color: #0b0f19;
-    color: #f1f5f9;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    color: inherit;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
   }
 }
 
-/* Custom sleek scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Rendered Markdown (notes, answers, previews). */
+.prose-dt {
+  line-height: 1.65;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.prose-dt h1 { font-size: 1.6rem; font-weight: 700; margin: 1.2rem 0 0.6rem; }
+.prose-dt h2 { font-size: 1.3rem; font-weight: 700; margin: 1.2rem 0 0.5rem; color: var(--accent); }
+.prose-dt h3 { font-size: 1.1rem; font-weight: 650; margin: 1rem 0 0.4rem; }
+.prose-dt h4, .prose-dt h5, .prose-dt h6 { font-weight: 650; margin: 0.8rem 0 0.3rem; }
+.prose-dt p { margin: 0.5rem 0; }
+.prose-dt ul { list-style: disc; padding-left: 1.4rem; margin: 0.4rem 0; }
+.prose-dt ol { list-style: decimal; padding-left: 1.4rem; margin: 0.4rem 0; }
+.prose-dt li { margin: 0.15rem 0; }
+.prose-dt blockquote { border-left: 3px solid var(--warn); padding: 0.3rem 0.8rem; margin: 0.6rem 0; color: var(--muted); font-style: italic; }
+.prose-dt pre { background: var(--panel2); padding: 0.7rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.85rem; }
+.prose-dt code { background: var(--panel2); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
+.prose-dt hr { margin: 1rem 0; border-top: 1px solid var(--line); }
+.prose-dt a { color: var(--accent); text-decoration: underline; }
+.prose-dt table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin: 0.6rem 0; }
+.prose-dt th, .prose-dt td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.prose-dt th { background: var(--panel2); }
+.prose-dt .src-tag { color: var(--good); font-size: 0.75em; white-space: nowrap; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; color: black; }
 }

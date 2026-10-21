@@ -1,0 +1,69 @@
+name: CI
+# Lint, unit tests, production build, repository hygiene and Playwright
+# end-to-end tests (desktop + mobile) for every push and pull request.
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, test, build, e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Repository hygiene (no generated files tracked)
+        run: python3 scripts/check_workspace_hygiene.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm config set fetch-retries 5
+          npm ci
+
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Check native packaging
+        run: |
+          node --check packaging/windows/main.cjs
+          node scripts/prepare-native.mjs
+          test -f packaging/windows/web/index.html
+          test -f packaging/android/web/index.html
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts `npm run dev` on 127.0.0.1:3000 itself.
+      - name: End-to-end tests (desktop + mobile)
+        run: npm run test:e2e
+        env:
+          CI: "1"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

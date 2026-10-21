@@ -1,7 +1,16 @@
 {
   "name": "deep-tutor-pro-android",
-  "version": "1.6.14",
+  "version": "2.0.0",
   "private": true,
-  "dependencies": { "@capacitor/core": "8.5.3", "@capacitor/android": "8.5.3" },
-  "devDependencies": { "@capacitor/cli": "8.5.3" }
+  "description": "Deep Tutor Pro Android app (Capacitor). The android/ project is generated in CI by `npx cap add android`.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
 }

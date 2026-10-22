@@ -233,3 +233,36 @@ test('AI features explain how to sign in when signed out', async ({ page }) => {
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByText(/Sign in to the DeepTutor server/)).toBeVisible();
 });
+
+test('search (Ctrl+K) jumps to a student and stays out of the way of open dialogs', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/#/students');
+  await page.getByRole('button', { name: 'Add class' }).click();
+  await page.getByRole('button', { name: 'Add student' }).first().click();
+  await page.getByLabel('First name').fill('Amina');
+  await page.getByLabel('Last name / surname').fill('Nakato');
+  await page.getByLabel('Last name / surname').press('Tab');
+  await expect(page.locator('main h1')).toHaveText('Amina Nakato');
+
+  // A confirmation dialog keeps the keyboard: Ctrl+K does not open search over it.
+  await page.goto('/#/students');
+  await page.getByRole('link', { name: /Year 1/ }).first().click();
+  await page.getByRole('tab', { name: 'Class details' }).click();
+  await page.getByRole('button', { name: 'Delete class' }).click();
+  const confirmDialog = page.getByRole('dialog', { name: /Delete/ });
+  await expect(confirmDialog).toBeVisible();
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog', { name: 'Search everything' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(confirmDialog).toHaveCount(0);
+
+  await page.keyboard.press('Control+k');
+  const search = page.getByRole('combobox', { name: 'Search everything' });
+  await expect(search).toBeFocused();
+  await search.fill('nakato');
+  await expect(page.getByRole('option', { name: /Amina Nakato/ })).toBeVisible();
+  await search.press('Enter');
+  await expect(page.locator('main h1')).toHaveText('Amina Nakato');
+  await expect(page.getByRole('dialog', { name: 'Search everything' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

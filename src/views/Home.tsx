@@ -1,175 +1,202 @@
-import { BookOpen, BrainCircuit, ClipboardList, FileText, GraduationCap, Library, Sparkles, Upload, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, BrainCircuit, CheckCircle2, ClipboardList, FileText, GraduationCap, LogIn, MessageSquare, Sparkles, Upload, Users, Wand2 } from 'lucide-react';
+import type { Workspace } from '../lib/model';
 import { useWorkspace } from '../state/store';
 import { getSession } from '../lib/api';
 import { sortUnits } from '../lib/curriculum';
 import { unitLabel } from '../lib/workspace';
-import { A, Badge, Card, Empty, LinkButton, Page, Stat } from '../ui/kit';
+import { href } from '../state/router';
+import { A, Card, Empty, LinkButton, Page } from '../ui/kit';
+import { MeterList } from '../ui/Charts';
 import { formatDate, plural } from '../state/helpers';
+
+interface Step {
+  icon: typeof Sparkles;
+  title: string;
+  detail: string;
+  to: string;
+  action: string;
+}
+
+/** What to do next, worked out from the workspace (most useful first). */
+export function nextSteps(ws: Workspace, signedIn: boolean): Step[] {
+  const steps: Step[] = [];
+  const covered = coveredTopics(ws);
+  if (!ws.programmes.length && !ws.units.length)
+    steps.push({ icon: GraduationCap, title: 'Import your curriculum', detail: 'Upload the curriculum or teacher’s guide; classes, units, outlines and contact hours are built from it.', to: '/curriculum?import=1', action: 'Import' });
+  if (!signedIn) steps.push({ icon: LogIn, title: 'Sign in to switch on AI and sync', detail: 'Notes, exams, Deep Solve and cloud backup need your DeepTutor server.', to: '/settings', action: 'Sign in' });
+  const pending = ws.units.filter((u) => !u.analysed);
+  if (pending.length) {
+    const p = ws.programmes.find((x) => x.id === pending[0].programmeId);
+    steps.push({ icon: Wand2, title: `Finish reading ${plural(pending.length, 'unit outline')}`, detail: 'Topics, contact hours and learning objectives have not been extracted yet.', to: p ? `/programmes/${p.id}` : '/units', action: 'Open' });
+  }
+  const gaps = sortUnits(ws.units)
+    .map((u) => ({ u, missing: u.topics.filter((t) => !covered.has(t.id)).length }))
+    .filter((x) => x.missing > 0);
+  if (gaps.length) {
+    const g = gaps[0];
+    steps.push({ icon: FileText, title: `Write notes for ${g.u.code || g.u.title}`, detail: `${plural(g.missing, 'topic')} in this unit ${g.missing === 1 ? 'has' : 'have'} no lecture notes${gaps.length > 1 ? `; ${plural(gaps.length - 1, 'other unit')} too` : ''}.`, to: `/units/${g.u.id}?tab=notes`, action: 'Generate' });
+  }
+  const draftPapers = ws.papers.filter((p) => p.status === 'draft');
+  if (draftPapers.length) steps.push({ icon: ClipboardList, title: `Review ${plural(draftPapers.length, 'draft paper')}`, detail: 'Check the questions and marking scheme, then approve as final.', to: `/assessments/${draftPapers[0].id}`, action: 'Review' });
+  const draftNotes = ws.notes.filter((n) => n.status === 'draft');
+  if (draftNotes.length) steps.push({ icon: CheckCircle2, title: `Approve ${plural(draftNotes.length, 'draft note')}`, detail: 'AI notes stay marked as drafts on exports until you approve them.', to: `/notes/${draftNotes[0].id}`, action: 'Review' });
+  if (ws.classes.length && !ws.students.length) steps.push({ icon: Users, title: 'Add your students', detail: 'Import a class list from Excel or CSV, or add students one by one.', to: `/students/class/${ws.classes[0].id}`, action: 'Add' });
+  return steps.slice(0, 4);
+}
+
+/** Ids of the topics that have at least one lecture note. */
+const coveredTopics = (ws: Workspace) => new Set(ws.notes.map((n) => n.topicId));
 
 export default function Home() {
   const ws = useWorkspace();
   const signedIn = !!getSession();
+  const steps = nextSteps(ws, signedIn);
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
   const greeting = ws.settings.tutorName ? `Welcome back, ${ws.settings.tutorName}` : 'Welcome to Deep Tutor Pro';
-  const recentNotes = [...ws.notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
-  const recentPapers = [...ws.papers].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
   const unitsById = new Map(ws.units.map((u) => [u.id, u]));
-  const pendingUnits = ws.units.filter((u) => !u.analysed).length;
-  const topicsWithoutNotes = ws.units.reduce((n, u) => n + u.topics.filter((t) => !ws.notes.some((x) => x.topicId === t.id)).length, 0);
-
-  const steps = [
-    { done: ws.programmes.length > 0, label: 'Import a curriculum or teacher’s guide', to: '/curriculum', icon: GraduationCap },
-    { done: ws.references.some((r) => r.category !== 'curriculum'), label: 'Upload reference books, guidelines or past papers', to: '/library', icon: Upload },
-    { done: ws.notes.length > 0, label: 'Generate lecture notes by contact hours', to: '/notes', icon: FileText },
-    { done: ws.papers.length > 0, label: 'Set an exam, CAT or assignment with a marking scheme', to: '/assessments', icon: ClipboardList },
-    { done: ws.students.length > 0, label: 'Add students and record marks', to: '/students', icon: Users },
+  const recent = [
+    ...ws.notes.map((n) => ({ id: n.id, kind: 'note' as const, title: n.title, sub: unitsById.get(n.unitId) ? unitLabel(unitsById.get(n.unitId)!) : 'Lecture notes', at: n.updatedAt, to: `/notes/${n.id}` })),
+    ...ws.papers.map((p) => ({ id: p.id, kind: 'paper' as const, title: p.title, sub: p.status === 'final' ? 'Approved paper' : 'Draft paper', at: p.updatedAt, to: `/assessments/${p.id}` })),
+    ...ws.chats.map((c) => ({ id: c.id, kind: 'chat' as const, title: c.title, sub: c.kind === 'solve' ? 'Deep Solve' : 'Chat', at: c.updatedAt, to: c.kind === 'solve' ? `/solve/${c.id}` : `/research/${c.kind === 'research' ? 'research' : 'chat'}?chat=${c.id}` })),
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 6);
+  const covered = coveredTopics(ws);
+  const coverage = sortUnits(ws.units)
+    .filter((u) => u.topics.length)
+    .map((u) => ({ id: u.id, label: u.code || u.title, value: (u.topics.filter((t) => covered.has(t.id)).length / u.topics.length) * 100, href: href(`/units/${u.id}`, { tab: 'notes' }), detail: unitLabel(u) }));
+  const stats: [string, number, string][] = [
+    ['Course units', ws.units.length, '/units'],
+    ['Lecture notes', ws.notes.length, '/notes'],
+    ['Papers', ws.papers.length, '/assessments'],
+    ['Bank questions', ws.bank.length, '/bank'],
+    ['Students', ws.students.length, '/students'],
+    ['References', ws.references.length, '/library'],
   ];
+  const kindIcon = { note: FileText, paper: ClipboardList, chat: MessageSquare };
 
   return (
-    <Page title={greeting} subtitle="Plan, teach and assess a whole programme — from the curriculum to the marks sheet.">
-      {!signedIn && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm">
-          <span>
-            <Sparkles className="mr-1.5 inline h-4 w-4 text-accent" />
-            Sign in to your DeepTutor server to switch on AI (curriculum analysis, notes, exams, Deep Solve) and cloud sync. Everything else already works offline.
-          </span>
-          <LinkButton to="/settings" variant="primary" size="sm">
-            Sign in
-          </LinkButton>
-        </div>
-      )}
-
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-        <Stat label="Programmes" value={ws.programmes.length} to="/curriculum" />
-        <Stat label="Course units" value={ws.units.length} to="/units" hint={pendingUnits ? `${pendingUnits} to analyse` : undefined} />
-        <Stat label="Lecture notes" value={ws.notes.length} to="/notes" hint={topicsWithoutNotes ? `${topicsWithoutNotes} topics without notes` : undefined} />
-        <Stat label="Exams & coursework" value={ws.papers.length} to="/assessments" />
-        <Stat label="Question bank" value={ws.bank.length} to="/bank" />
-        <Stat label="Students" value={ws.students.length} to="/students" />
-      </div>
-
+    <Page title={greeting} subtitle={`${today}${ws.settings.institution ? ` · ${ws.settings.institution}` : ''}`}>
       <div className="grid gap-5 lg:grid-cols-3">
-        <Card title="Getting started" className="lg:col-span-1">
-          <ol className="space-y-2.5">
-            {steps.map((s, i) => {
-              const Icon = s.icon;
-              return (
-                <li key={s.to}>
-                  <a href={`#${s.to}`} className="flex items-center gap-3 rounded-lg p-2 hover:bg-panel2">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${s.done ? 'bg-good/20 text-good' : 'bg-panel2 text-muted'}`}>{s.done ? '✓' : i + 1}</span>
-                    <Icon className="h-4 w-4 shrink-0 text-muted" />
-                    <span className={`text-sm ${s.done ? 'text-muted line-through' : ''}`}>{s.label}</span>
-                  </a>
-                </li>
-              );
-            })}
-          </ol>
-          <div className="mt-4 grid grid-cols-2 gap-2">
+        <section className="lg:col-span-2" aria-labelledby="next-steps">
+          <h2 id="next-steps" className="mb-2 text-sm font-semibold text-muted">
+            Next steps
+          </h2>
+          {steps.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-xl border border-good/40 bg-good/10 p-4 text-sm">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-good" />
+              All caught up — every topic has notes and every draft is approved.
+            </div>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {steps.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <li key={s.title}>
+                    <a href={`#${s.to}`} className="group flex h-full gap-3 rounded-xl border border-line bg-panel p-4 transition hover:border-accent">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">{s.title}</span>
+                        <span className="mt-0.5 block text-sm text-muted">{s.detail}</span>
+                        <span className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-accent">
+                          {s.action} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <ul aria-label="Workspace totals" className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {stats.map(([label, n, to]) => (
+              <li key={label}>
+                <a href={href(to)} className="block rounded-xl border border-line bg-panel px-3 py-2.5 transition hover:border-accent">
+                  <span className="block truncate text-[11px] text-muted">{label}</span>
+                  <span className="block text-xl font-bold tabular-nums">{n.toLocaleString()}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <Card title="Quick actions">
+          <div className="grid grid-cols-2 gap-2">
+            <LinkButton to="/curriculum" query={{ import: '1' }} icon={<Upload className="h-4 w-4" />}>
+              Curriculum
+            </LinkButton>
+            <LinkButton to="/library" icon={<BookOpen className="h-4 w-4" />}>
+              References
+            </LinkButton>
+            <LinkButton to="/assessments/new" icon={<ClipboardList className="h-4 w-4" />}>
+              New exam
+            </LinkButton>
             <LinkButton to="/solve" icon={<BrainCircuit className="h-4 w-4" />}>
               Deep Solve
             </LinkButton>
-            <LinkButton to="/library" icon={<Library className="h-4 w-4" />}>
-              Library
-            </LinkButton>
           </div>
+          <p className="mt-3 text-xs text-muted">
+            Tip: press <kbd className="rounded border border-line px-1">Ctrl</kbd> + <kbd className="rounded border border-line px-1">K</kbd> to jump to any unit, note, paper or student.
+          </p>
         </Card>
 
-        <Card title="Programmes" className="lg:col-span-2" actions={<LinkButton size="sm" to="/curriculum" query={{ import: '1' }} variant="primary" icon={<Upload className="h-3.5 w-3.5" />}>Import curriculum</LinkButton>}>
-          {ws.programmes.length === 0 ? (
-            <Empty icon={<GraduationCap className="h-8 w-8" />} title="No curriculum yet">
-              Upload a curriculum or teacher’s guide (PDF, Word, scanned pages or photos). Deep Tutor Pro reads it and builds the classes, course units, outlines, objectives and contact hours for you.
+        <Card title="Lecture notes coverage" actions={<A to="/notes">All notes</A>} className="lg:col-span-2">
+          {coverage.length === 0 ? (
+            <Empty icon={<GraduationCap className="h-8 w-8" />} title="No course outlines yet" action={<LinkButton to="/curriculum" query={{ import: '1' }} variant="primary">Import a curriculum</LinkButton>}>
+              Once units have topics, this shows how much of each unit already has lecture notes.
             </Empty>
           ) : (
-            <div className="space-y-3">
-              {ws.programmes.map((p) => {
-                const units = sortUnits(ws.units.filter((u) => u.programmeId === p.id));
-                const years = [...new Set(units.map((u) => u.year))].sort((a, b) => a - b);
+            <MeterList ariaLabel="Share of topics with lecture notes, per course unit" rows={coverage} />
+          )}
+        </Card>
+
+        <Card title="Recent work">
+          {recent.length === 0 ? (
+            <p className="text-sm text-muted">Notes, papers and Deep Solve conversations appear here.</p>
+          ) : (
+            <ul className="space-y-1">
+              {recent.map((r) => {
+                const Icon = kindIcon[r.kind];
                 return (
-                  <div key={p.id} className="rounded-lg border border-line p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <A to={`/programmes/${p.id}`} className="font-semibold">
-                        {p.title}
-                      </A>
-                      <span className="text-xs text-muted">
-                        {plural(units.length, 'unit')} · {p.durationYears} year{p.durationYears === 1 ? '' : 's'}
+                  <li key={`${r.kind}-${r.id}`}>
+                    <a href={`#${r.to}`} className="flex items-start gap-2.5 rounded-lg p-2 hover:bg-panel2">
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm">{r.title}</span>
+                        <span className="block truncate text-xs text-muted">
+                          {r.sub} · {formatDate(r.at)}
+                        </span>
                       </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {years.map((y) => (
-                        <a key={y} href={`#/units?programme=${p.id}&year=${y}`} className="rounded-full bg-panel2 px-2.5 py-0.5 text-xs hover:text-accent">
-                          Year {y}: {units.filter((u) => u.year === y).length} units
-                        </a>
-                      ))}
-                    </div>
-                  </div>
+                    </a>
+                  </li>
                 );
               })}
-            </div>
-          )}
-        </Card>
-
-        <Card title="Recent lecture notes" className="lg:col-span-1" actions={<A to="/notes">All notes</A>}>
-          {recentNotes.length === 0 ? (
-            <p className="text-sm text-muted">Notes you generate or write appear here.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {recentNotes.map((n) => (
-                <li key={n.id} className="flex items-start gap-2">
-                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-                  <div className="min-w-0">
-                    <A to={`/notes/${n.id}`} className="block truncate">
-                      {n.title}
-                    </A>
-                    <div className="truncate text-xs text-muted">{unitsById.get(n.unitId) ? unitLabel(unitsById.get(n.unitId)!) : 'No unit'} · {formatDate(n.updatedAt)}</div>
-                  </div>
-                </li>
-              ))}
             </ul>
           )}
         </Card>
 
-        <Card title="Recent exams & coursework" className="lg:col-span-1" actions={<A to="/assessments">All</A>}>
-          {recentPapers.length === 0 ? (
-            <p className="text-sm text-muted">Exams, CATs and assignments you set appear here.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {recentPapers.map((p) => (
-                <li key={p.id} className="flex items-start gap-2">
-                  <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-                  <div className="min-w-0">
-                    <A to={`/assessments/${p.id}`} className="block truncate">
-                      {p.title}
-                    </A>
-                    <div className="flex items-center gap-1.5 text-xs text-muted">
-                      <Badge tone={p.status === 'final' ? 'good' : 'warn'}>{p.status}</Badge>
-                      {formatDate(p.updatedAt)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card title="Classes" className="lg:col-span-1" actions={<A to="/students">Students & marks</A>}>
-          {ws.classes.length === 0 ? (
-            <p className="text-sm text-muted">Classes are created for each year of study when you import a curriculum, or add them yourself.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
+        {ws.classes.length > 0 && (
+          <Card title="Classes" actions={<A to="/students">Students & marks</A>} className="lg:col-span-3">
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {[...ws.classes]
                 .sort((a, b) => a.year - b.year || a.name.localeCompare(b.name))
-                .slice(0, 8)
                 .map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-2">
-                    <A to={`/students/class/${c.id}`} className="truncate">
-                      <BookOpen className="mr-1.5 inline h-3.5 w-3.5" />
-                      {c.name}
-                    </A>
-                    <span className="shrink-0 text-xs text-muted">{plural(ws.students.filter((s) => s.classId === c.id).length, 'student')}</span>
+                  <li key={c.id}>
+                    <a href={href(`/students/class/${c.id}`)} className="flex items-center justify-between gap-2 rounded-lg border border-line p-3 hover:border-accent">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{c.name}</span>
+                        <span className="text-xs text-muted">Year {c.year}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-muted">{plural(ws.students.filter((s) => s.classId === c.id).length, 'student')}</span>
+                    </a>
                   </li>
                 ))}
             </ul>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </Page>
   );

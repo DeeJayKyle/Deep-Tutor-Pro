@@ -25,6 +25,7 @@ import { adoptCookieSession, getSession, loadSession, onSession } from './lib/ap
 import { Button, Spinner, UiProvider, cx } from './ui/kit';
 import { ConflictDialog } from './views/ConflictDialog';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { CommandPalette } from './ui/CommandPalette';
 import { cancelJob, dismissJob, useJobs } from './state/jobs';
 
 const HomeView = lazy(() => import('./views/Home'));
@@ -42,16 +43,16 @@ const SettingsView = lazy(() => import('./views/Settings'));
 
 import { APP_VERSION } from './lib/version';
 
-const NAV = [
+const NAV: { to: string; label: string; short?: string; icon: typeof Home; group: string }[] = [
   { to: '/', label: 'Home', icon: Home, group: '' },
   { to: '/curriculum', label: 'Curriculum', icon: GraduationCap, group: 'Plan' },
-  { to: '/units', label: 'Classes & units', icon: BookOpen, group: 'Plan' },
+  { to: '/units', label: 'Classes & units', short: 'Units', icon: BookOpen, group: 'Plan' },
   { to: '/library', label: 'Reference library', icon: Library, group: 'Plan' },
-  { to: '/notes', label: 'Lecture notes', icon: FileText, group: 'Teach' },
+  { to: '/notes', label: 'Lecture notes', short: 'Notes', icon: FileText, group: 'Teach' },
   { to: '/assessments', label: 'Exams & coursework', icon: ClipboardList, group: 'Assess' },
   { to: '/bank', label: 'Question bank', icon: ListChecks, group: 'Assess' },
-  { to: '/students', label: 'Students & marks', icon: Users, group: 'Assess' },
-  { to: '/solve', label: 'Deep Solve', icon: BrainCircuit, group: 'AI' },
+  { to: '/students', label: 'Students & marks', short: 'Marks', icon: Users, group: 'Assess' },
+  { to: '/solve', label: 'Deep Solve', short: 'Solve', icon: BrainCircuit, group: 'AI' },
   { to: '/research', label: 'Tutor chat & research', icon: Search, group: 'AI' },
   { to: '/knowledge', label: 'Knowledge bases', icon: Database, group: 'AI' },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, group: 'App' },
@@ -90,7 +91,7 @@ function routeView(first: string | undefined): React.ReactNode {
     default:
       return (
         <div className="p-8 text-center text-muted">
-          This page does not exist. <a className="text-accent" href="#/">Go home</a>
+          This page does not exist. <a className="text-accent underline underline-offset-2" href="#/">Go home</a>
         </div>
       );
   }
@@ -217,7 +218,7 @@ function Shell() {
         const showGroup = item.group && item.group !== NAV[i - 1]?.group;
         return (
           <React.Fragment key={item.to}>
-            {showGroup && <div className="mt-3 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/80">{item.group}</div>}
+            {showGroup && <div className="mt-3 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">{item.group}</div>}
             <a
               href={href(item.to)}
               aria-current={isActive(item.to) ? 'page' : undefined}
@@ -265,6 +266,18 @@ function Shell() {
             <Menu className="h-5 w-5" />
           </button>
           <span className="truncate text-sm font-semibold lg:hidden">Deep Tutor Pro</span>
+          <button
+            onClick={() => window.dispatchEvent(new Event('dtp-open-palette'))}
+            className="ml-2 hidden min-w-[16rem] items-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-1.5 text-left text-sm text-muted hover:text-ink md:flex"
+            aria-label="Search everything (Ctrl+K)"
+          >
+            <Search className="h-4 w-4" />
+            <span className="flex-1">Search…</span>
+            <kbd className="rounded border border-line px-1.5 text-[11px]">Ctrl K</kbd>
+          </button>
+          <button onClick={() => window.dispatchEvent(new Event('dtp-open-palette'))} className="rounded-md p-1.5 hover:bg-panel2 md:hidden" aria-label="Search everything">
+            <Search className="h-5 w-5" />
+          </button>
           <div className="ml-auto flex items-center gap-2">
             <JobsTray />
             <SyncBadge />
@@ -282,13 +295,14 @@ function Shell() {
             return (
               <a key={item.to} href={href(item.to)} className={cx('flex flex-col items-center gap-0.5 py-2 text-[10px]', isActive(item.to) ? 'text-accent' : 'text-muted')}>
                 <Icon className="h-5 w-5" />
-                {item.label.split(' ')[0]}
+                {item.short ?? item.label}
               </a>
             );
           })}
         </nav>
       </div>
       <ConflictDialog />
+      <CommandPalette />
     </div>
   );
 }

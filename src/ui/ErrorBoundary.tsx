@@ -27,7 +27,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode; 
         <h1 className="text-lg font-semibold">This screen hit a problem</h1>
         <p className="mt-2 text-sm text-muted">Your work is saved and the rest of the app still works. Try again, or open another screen from the menu.</p>
         <pre className="mt-4 overflow-x-auto rounded-lg bg-panel2 p-3 text-left text-xs text-muted">{this.state.error.message}</pre>
-        <button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink" onClick={() => this.setState({ error: null })}>
+        <button className="mt-4 rounded-lg bg-accent-solid px-4 py-2 text-sm font-medium text-accent-ink" onClick={() => this.setState({ error: null })}>
           Try again
         </button>
       </div>

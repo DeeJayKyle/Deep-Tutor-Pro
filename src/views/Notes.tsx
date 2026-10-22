@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Columns2, Download, Eye, FileText, Pencil, Presentation, Printer, Search, Trash2, Wand2 } from 'lucide-react';
 import type { Note } from '../lib/model';
 import { api } from '../lib/api';
@@ -10,6 +10,7 @@ import { navigate, useRoute } from '../state/router';
 import { patch, remove, useWorkspace } from '../state/store';
 import { aiProvider, docMeta, formatDate, plural, programmeTitle } from '../state/helpers';
 import { Markdown, Toc } from '../ui/Markdown';
+import { formattingShortcut, MarkdownToolbar } from '../ui/MarkdownToolbar';
 import { A, Badge, Button, Card, EditableText, Empty, Input, LinkButton, Page, Select, Textarea, cx, useAction, useUi } from '../ui/kit';
 
 export default function NotesView() {
@@ -88,6 +89,7 @@ function NoteEditor({ id }: { id: string }) {
   const [mode, setMode] = useState<'preview' | 'edit' | 'split'>(() => (window.innerWidth >= 1280 ? 'split' : 'preview'));
   const [instruction, setInstruction] = useState('');
   const [undo, setUndo] = useState<string | null>(null);
+  const editor = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setDraft(note?.markdown ?? '');
@@ -186,7 +188,7 @@ function NoteEditor({ id }: { id: string }) {
               ['split', Columns2, 'Side by side'],
             ] as const
           ).map(([m, Icon, label]) => (
-            <button key={m} onClick={() => setMode(m)} className={cx('flex items-center gap-1 rounded-md px-2.5 py-1 text-xs', mode === m ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink')}>
+            <button key={m} onClick={() => setMode(m)} className={cx('flex items-center gap-1 rounded-md px-2.5 py-1 text-xs', mode === m ? 'bg-accent-solid text-accent-ink' : 'text-muted hover:text-ink')}>
               <Icon className="h-3.5 w-3.5" /> {label}
             </button>
           ))}
@@ -224,7 +226,17 @@ function NoteEditor({ id }: { id: string }) {
       <div className="grid gap-4 xl:grid-cols-[1fr_260px]">
         <div className={cx('grid gap-4', mode === 'split' && 'lg:grid-cols-2')}>
           {mode !== 'preview' && (
-            <Textarea aria-label="Note text (Markdown)" className="min-h-[70vh] font-mono text-[13px] leading-relaxed" value={draft} onChange={(e) => setDraft(e.target.value)} />
+            <div className="min-w-0">
+              <MarkdownToolbar target={editor} onChange={setDraft} />
+              <Textarea
+                ref={editor}
+                aria-label="Note text"
+                className="min-h-[70vh] rounded-t-none font-mono text-[13px] leading-relaxed"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => formattingShortcut(e, setDraft)}
+              />
+            </div>
           )}
           {mode !== 'edit' && (
             <Card className="min-w-0">
@@ -263,11 +275,11 @@ function NoteEditor({ id }: { id: string }) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs text-muted">From hour</label>
-                  <EditableText type="number" value={String(note.hourStart)} onCommit={(v) => set({ hourStart: Math.max(0, Number(v) || 0) })} />
+                  <EditableText ariaLabel="From contact hour" type="number" value={String(note.hourStart)} onCommit={(v) => set({ hourStart: Math.max(0, Number(v) || 0) })} />
                 </div>
                 <div>
                   <label className="block text-xs text-muted">To hour</label>
-                  <EditableText type="number" value={String(note.hourEnd)} onCommit={(v) => set({ hourEnd: Math.max(0, Number(v) || 0) })} />
+                  <EditableText ariaLabel="To contact hour" type="number" value={String(note.hourEnd)} onCommit={(v) => set({ hourEnd: Math.max(0, Number(v) || 0) })} />
                 </div>
               </div>
               {sources.length > 0 && (
@@ -300,17 +312,17 @@ function NoteEditor({ id }: { id: string }) {
         </aside>
       </div>
 
-      <div className="no-print mt-6 flex justify-between gap-2">
+      <div className="no-print mt-6 flex flex-wrap justify-between gap-2 [&>a]:max-w-full">
         {prev ? (
           <LinkButton to={`/notes/${prev.id}`} icon={<ArrowLeft className="h-4 w-4" />}>
-            <span className="max-w-[40vw] truncate">{prev.title}</span>
+            <span className="min-w-0 max-w-[60vw] truncate sm:max-w-[40vw]">{prev.title}</span>
           </LinkButton>
         ) : (
           <span />
         )}
         {next && (
           <LinkButton to={`/notes/${next.id}`}>
-            <span className="max-w-[40vw] truncate">{next.title}</span>
+            <span className="min-w-0 max-w-[60vw] truncate sm:max-w-[40vw]">{next.title}</span>
             <ArrowRight className="h-4 w-4" />
           </LinkButton>
         )}

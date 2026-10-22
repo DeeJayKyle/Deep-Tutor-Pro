@@ -432,7 +432,7 @@ function Data() {
           </>
         ) : (
           <p className="text-sm text-muted">
-            Sign in (<a className="text-accent" href="#/settings?tab=account">Account & server</a>) to keep a private cloud copy and use the same workspace on your PC and phone.
+            Sign in (<a className="text-accent underline underline-offset-2" href="#/settings?tab=account">Account & server</a>) to keep a private cloud copy and use the same workspace on your PC and phone.
           </p>
         )}
       </Card>

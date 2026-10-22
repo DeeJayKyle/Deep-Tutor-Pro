@@ -195,7 +195,7 @@ export default function SolveView() {
           <h1 className="font-semibold">Deep Solve</h1>
           <div className="flex rounded-lg border border-line p-0.5">
             {MODES.map((m) => (
-              <button key={m.id} title={m.hint} onClick={() => setMode(m.id)} className={cx('rounded-md px-2.5 py-1 text-xs', mode === m.id ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink')}>
+              <button key={m.id} title={m.hint} onClick={() => setMode(m.id)} className={cx('rounded-md px-2.5 py-1 text-xs', mode === m.id ? 'bg-accent-solid text-accent-ink' : 'text-muted hover:text-ink')}>
                 {m.label}
               </button>
             ))}
@@ -229,7 +229,7 @@ export default function SolveView() {
             <div className="mx-auto max-w-3xl space-y-4">
               {chat.messages.map((m) => (
                 <div key={m.id} className={cx('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-                  <div className={cx('max-w-[92%] rounded-2xl px-4 py-3', m.role === 'user' ? 'bg-accent text-accent-ink' : m.error ? 'border border-bad/40 bg-bad/10' : 'border border-line bg-panel')}>
+                  <div className={cx('max-w-[92%] rounded-2xl px-4 py-3', m.role === 'user' ? 'bg-accent-solid text-accent-ink' : m.error ? 'border border-bad/40 bg-bad/10' : 'border border-line bg-panel')}>
                     {m.role === 'user' ? <div className="whitespace-pre-wrap text-sm">{m.content}</div> : <Markdown source={m.content} />}
                     {m.attachments.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">

@@ -9,6 +9,7 @@ import { fullName, normStudent, now, uid, unitLabel } from '../lib/workspace';
 import { navigate, useRoute } from '../state/router';
 import { patch, remove, update, upsert, useWorkspace } from '../state/store';
 import { docMeta, plural } from '../state/helpers';
+import { bandCounts, ColumnChart, MeterList } from '../ui/Charts';
 import { A, Badge, Button, Card, EditableText, Empty, Field, FileButton, Input, LinkButton, Modal, Page, Select, Stat, Tabs, Textarea, cx, useAction, useUi } from '../ui/kit';
 
 const STATUSES: StudentStatus[] = ['Active', 'Suspended', 'Deferred', 'Discontinued', 'Completed', 'Graduated'];
@@ -666,6 +667,28 @@ function MarksSheet({ classId }: { classId: string }) {
             <Stat label="Lowest" value={st.min ?? '—'} />
             <Stat label="Pass rate" value={st.passRate === null ? '—' : `${st.passRate}%`} />
           </div>
+          {st.count > 0 && (
+            <div className="mb-4 grid gap-4 lg:grid-cols-3">
+              <Card title="Distribution of final marks" className="lg:col-span-2">
+                <ColumnChart
+                  ariaLabel="Number of students in each 10-mark band"
+                  data={bandCounts(results.map((x) => x.r.weighted).filter((v): v is number => v !== null))}
+                  reference={{ atIndex: passMark / 10, label: `Pass ${passMark}%` }}
+                />
+              </Card>
+              <Card title="Class average by component">
+                <MeterList
+                  ariaLabel="Class average for each assessment component, as a percentage of its maximum"
+                  rows={components.map((c) => {
+                    const vals = results.map((x) => x.r.scores[c.id]).filter((v): v is number => v !== null && v !== undefined);
+                    if (!vals.length) return { id: c.id, label: `${c.name} (none marked)`, value: 0, valueText: 'No marks yet', detail: 'No marks entered for this component yet' };
+                    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+                    return { id: c.id, label: `${c.name} (${vals.length} marked)`, value: (avg / c.maxScore) * 100, detail: `Average ${Math.round(avg * 10) / 10} of ${c.maxScore}` };
+                  })}
+                />
+              </Card>
+            </div>
+          )}
           <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-panel2 text-left text-xs text-muted">

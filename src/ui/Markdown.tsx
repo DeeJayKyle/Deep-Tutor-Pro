@@ -128,7 +128,7 @@ export function Toc({ source, onJump }: { source: string; onJump?: () => void })
             document.getElementById(`sec-${x.slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             onJump?.();
           }}
-          className="block w-full truncate text-left text-muted hover:text-accent"
+          className="block min-h-6 w-full truncate py-0.5 text-left text-muted hover:text-accent"
           style={{ paddingLeft: `${(x.level - 1) * 0.75}rem` }}
         >
           {x.text}

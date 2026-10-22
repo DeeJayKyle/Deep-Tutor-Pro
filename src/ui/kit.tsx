@@ -9,7 +9,7 @@ export const cx = (...c: (string | number | false | null | undefined)[]) => c.fi
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-ink hover:brightness-110 border-transparent',
+  primary: 'bg-accent-solid text-accent-ink hover:brightness-110 border-transparent',
   secondary: 'bg-panel2 text-ink hover:bg-line/60 border-line',
   ghost: 'bg-transparent text-ink hover:bg-panel2 border-transparent',
   danger: 'bg-bad/10 text-bad hover:bg-bad/20 border-bad/30',
@@ -66,7 +66,7 @@ export function LinkButton({ to, query, variant = 'secondary', icon, children, c
 /** In-app hyperlink. */
 export function A({ to, query, children, className, title }: { to: string; query?: Record<string, string | undefined>; children: React.ReactNode; className?: string; title?: string }) {
   return (
-    <a href={href(to, query)} title={title} className={cx('text-accent hover:underline', className)}>
+    <a href={href(to, query)} title={title} className={cx('text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent', className)}>
       {children}
     </a>
   );
@@ -96,7 +96,7 @@ export function Page({ title, subtitle, actions, children, back }: { title: Reac
 
 export function Card({ title, actions, children, className, padded = true }: { title?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string; padded?: boolean }) {
   return (
-    <section className={cx('rounded-xl border border-line bg-panel', className)}>
+    <section className={cx('min-w-0 rounded-xl border border-line bg-panel', className)}>
       {(title || actions) && (
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>
@@ -183,7 +183,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
 
 // ------------------------------------------------------------------- Forms --
 
-const inputCls = 'w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-sm text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25';
+const inputCls = 'w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25';
 
 export function Field({ label, hint, children, className }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactElement<{ id?: string }>; className?: string }) {
   const id = useId();

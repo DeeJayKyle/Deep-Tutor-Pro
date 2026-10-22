@@ -134,7 +134,7 @@ function AgentChat({ kind }: { kind: 'tutor' | 'research' }) {
           <div className="mt-2 text-xs text-muted">Knowledge bases</div>
           {kbs.length === 0 ? (
             <p className="text-xs text-muted">
-              None. <a href="#/knowledge" className="text-accent">Create one</a> from your library.
+              None. <a href="#/knowledge" className="text-accent underline underline-offset-2">Create one</a> from your library.
             </p>
           ) : (
             kbs.map((k) => <Checkbox key={k.name} checked={chosenKbs.includes(k.name)} onChange={(v) => setChosenKbs(v ? [...chosenKbs, k.name] : chosenKbs.filter((x) => x !== k.name))} label={<span className="text-xs">{k.name}</span>} />)
@@ -194,7 +194,7 @@ function Bubble({ m }: { m: ChatMessage }) {
   if (m.role === 'user')
     return (
       <div className="flex justify-end">
-        <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl bg-accent px-4 py-2.5 text-sm text-accent-ink">{m.content}</div>
+        <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl bg-accent-solid px-4 py-2.5 text-sm text-accent-ink">{m.content}</div>
       </div>
     );
   const save = () => {
@@ -215,7 +215,7 @@ function Bubble({ m }: { m: ChatMessage }) {
             {m.sources.map((s, i) => (
               <li key={i}>
                 {s.url ? (
-                  <a className="text-accent" href={s.url} target="_blank" rel="noopener noreferrer">
+                  <a className="text-accent underline underline-offset-2" href={s.url} target="_blank" rel="noopener noreferrer">
                     {s.title}
                   </a>
                 ) : (
@@ -279,7 +279,7 @@ function Finder() {
               ['videos', Video, 'Videos'],
             ] as const
           ).map(([k, Icon, label]) => (
-            <button type="button" key={k} onClick={() => setKind(k)} className={cx('flex items-center gap-1 rounded-md px-3 py-1.5 text-xs', kind === k ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink')}>
+            <button type="button" key={k} onClick={() => setKind(k)} className={cx('flex items-center gap-1 rounded-md px-3 py-1.5 text-xs', kind === k ? 'bg-accent-solid text-accent-ink' : 'text-muted hover:text-ink')}>
               <Icon className="h-3.5 w-3.5" /> {label}
             </button>
           ))}

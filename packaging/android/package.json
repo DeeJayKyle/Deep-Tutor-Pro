@@ -1,6 +1,6 @@
 {
   "name": "deep-tutor-pro-android",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Deep Tutor Pro Android app (Capacitor). The android/ project is generated in CI by `npx cap add android`.",
   "license": "Apache-2.0",

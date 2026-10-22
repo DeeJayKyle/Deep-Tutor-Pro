@@ -201,7 +201,14 @@ jobs:
         working-directory: packaging/windows
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npx electron-builder --win nsis --x64 --publish never
+          SIGNING: ${{ steps.cert.outputs.signing }}
+        run: |
+          # Installed copies update themselves from latest.yml (SHA-512 checked).
+          # With a real certificate they also check the publisher's signature;
+          # a self-signed one cannot be verified on the tutor's PC.
+          extra=()
+          if [ "$SIGNING" = "certificate" ]; then extra+=(-c.win.verifyUpdateCodeSignature=true); fi
+          npx electron-builder --win nsis --x64 --publish never "${extra[@]}"
 
       - name: Verify the installer
         shell: pwsh
@@ -215,6 +222,18 @@ jobs:
           if ($null -eq $sig.SignerCertificate) { throw 'Installer is not signed' }
           Write-Host "Signed by: $($sig.SignerCertificate.Subject) (status: $($sig.Status))"
           Get-FileHash -Algorithm SHA256 $exe | Format-List
+          $feed = 'packaging/windows/out/latest.yml'
+          if (-not (Test-Path $feed)) { throw 'latest.yml (the auto-update feed) was not generated' }
+          $yml = Get-Content -Raw $feed
+          if ($yml -notmatch [regex]::Escape("Deep-Tutor-Pro-$env:APP_VERSION-Windows-x64-Setup.exe")) { throw 'latest.yml does not point at this installer' }
+          if ($yml -notmatch "version: $([regex]::Escape($env:APP_VERSION))") { throw 'latest.yml has the wrong version' }
+          Write-Host $yml
+          # The updater itself must be inside the app, or installed copies never update.
+          Push-Location packaging/windows
+          node -e "const files = require('@electron/asar').listPackage(process.argv[1]); if (!files.some((f) => f.includes('electron-updater'))) { console.error('electron-updater is not packaged in app.asar'); process.exit(1); }" out/win-unpacked/resources/app.asar
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { throw 'electron-updater is missing from the app' }
 
       - name: Remove signing material
         if: always()
@@ -224,7 +243,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: packaging/windows/out/Deep-Tutor-Pro-*-Windows-x64-Setup.exe
+          path: |
+            packaging/windows/out/Deep-Tutor-Pro-*-Windows-x64-Setup.exe
+            packaging/windows/out/Deep-Tutor-Pro-*-Windows-x64-Setup.exe.blockmap
+            packaging/windows/out/latest.yml
           if-no-files-found: error
 
   android:
@@ -439,6 +461,7 @@ jobs:
           test -f "Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe"
           test -f "Deep-Tutor-Pro-$APP_VERSION-Android.apk"
           test -f "deep-tutor-pro-web-$APP_VERSION.zip"
+          test -f latest.yml
           sha256sum "Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe" \
             "Deep-Tutor-Pro-$APP_VERSION-Android.apk" \
             "deep-tutor-pro-web-$APP_VERSION.zip" > SHA256SUMS.txt
@@ -501,7 +524,9 @@ jobs:
             "release-assets/Deep-Tutor-Pro-$APP_VERSION-Windows-x64-Setup.exe" \
             "release-assets/Deep-Tutor-Pro-$APP_VERSION-Android.apk" \
             "release-assets/deep-tutor-pro-web-$APP_VERSION.zip" \
-            release-assets/SHA256SUMS.txt
+            release-assets/SHA256SUMS.txt \
+            release-assets/latest.yml \
+            release-assets/*.blockmap
           {
             echo "### Released $TAG"
             echo ""

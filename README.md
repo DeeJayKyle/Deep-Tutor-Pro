@@ -24,9 +24,28 @@ Hyperlinks connect everything: a topic links to its notes and bank questions, a 
 
 ## AI and the server
 
-AI runs on your **DeepTutor server** ([DeeJayKyle/DeepTutor](https://github.com/DeeJayKyle/DeepTutor), `/api/tutorpro`), which holds the API keys — the apps never see them. Gemini is used by default and OpenAI as soon as `OPENAI_API_KEY` is set on the server; switch in **Settings › AI provider**. Sign in under **Settings › Account & server** (default server: `https://tutor-companion.djrileykyle.workers.dev`). The web app is also served from that address at `/pro/`.
+AI runs on your **DeepTutor server** ([DeeJayKyle/DeepTutor](https://github.com/DeeJayKyle/DeepTutor), `/api/tutorpro`), which holds the API keys — the apps never see them. Gemini is used by default and OpenAI as soon as `OPENAI_API_KEY` is set on the server; switch in **Settings › AI provider**. Sign in, or create your own account, under **Settings › Account & server** (default server: `https://tutor-companion.djrileykyle.workers.dev`). The web app is also served from that address at `/pro/`.
 
 Without signing in, everything except AI, knowledge bases and cloud sync works on the device. AI output is always marked as a draft until you approve it.
+
+## Updates
+
+Every copy follows the latest GitHub release:
+
+- **Windows** checks for updates on start and every 6 hours, downloads them in the background, and installs when you choose **Restart now** or the next time the app closes.
+- **Android** shows a banner when a newer release exists. **Download update** fetches the new APK, which Android installs over the current one. If that release was signed with a temporary key, the banner says so and asks you to back up first.
+- **Web** (`/pro/`) checks for a new build every hour and whenever it comes back to the foreground. The new build is used the next time the app is opened. A banner offers **Update now** to switch straight away. It never reloads by itself, so nothing you are typing is lost.
+- **Windows "Restart now"** saves pending edits first and warns if an AI task is still running.
+
+Android only installs an update over the existing app when both are signed with the same key. Add a permanent key to the repository secrets once (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, optional `ANDROID_KEY_PASSWORD`), for example:
+
+```bash
+keytool -genkeypair -keystore deep-tutor-pro.p12 -storetype PKCS12 -alias deeptutorpro \
+  -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Deep Tutor Pro"
+base64 -w0 deep-tutor-pro.p12   # paste into ANDROID_KEYSTORE_BASE64; keep the file safe
+```
+
+Without this secret, each build uses a temporary key. Updating then needs an uninstall and reinstall, so export your data first.
 
 ## Development
 

@@ -6,7 +6,7 @@
 // so it gets a stable, secure origin: IndexedDB persists, fetch/CORS work
 // against the DeepTutor server (which allows the app://tutor-pro origin), and
 // the microphone can be requested.
-const { app, BrowserWindow, net, protocol, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, net, protocol, session, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -120,6 +120,80 @@ function configureSession(ses) {
 
 let mainWindow = null;
 
+// Updates come from the GitHub releases of DeeJayKyle/Deep-Tutor-Pro
+// (latest.yml, checked by its SHA-512 over HTTPS). They download in the
+// background and install when the app closes, or straight away if the tutor
+// chooses "Restart now".
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
+
+function startAutoUpdates() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.error('Automatic updates are unavailable: electron-updater is missing from this build.', err);
+    return;
+  }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('error', (err) => console.warn('Update check failed:', err && err.message));
+  let prompting = false;
+  let promptedFor = '';
+  autoUpdater.on('update-downloaded', async (info) => {
+    // Ask once per version; a newer download asks again even after "Later".
+    if (prompting || promptedFor === info.version || !mainWindow) return;
+    prompting = true;
+    promptedFor = info.version;
+    try {
+      await offerRestart(autoUpdater, info.version);
+    } finally {
+      prompting = false;
+    }
+  });
+  const check = () => autoUpdater.checkForUpdates().catch(() => undefined);
+  check();
+  setInterval(check, UPDATE_CHECK_MS);
+}
+
+/** Ask the page to save pending edits; reports whether AI work is still running. */
+async function prepareRenderer() {
+  if (!mainWindow) return { busy: false };
+  try {
+    const state = await mainWindow.webContents.executeJavaScript('window.__dtpPrepareForUpdate ? window.__dtpPrepareForUpdate() : { busy: false }', true);
+    return { busy: Boolean(state && state.busy) };
+  } catch {
+    return { busy: false };
+  }
+}
+
+async function offerRestart(autoUpdater, version) {
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: APP_TITLE,
+    message: `Deep Tutor Pro ${version} is ready to install.`,
+    detail: 'Restart now to finish updating, or keep working: it installs the next time you close the app. Your work is saved first.',
+    buttons: ['Restart now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response !== 0) return;
+  const { busy } = await prepareRenderer();
+  if (busy) {
+    const wait = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: APP_TITLE,
+      message: 'An AI task is still working.',
+      detail: 'Restarting now would stop it. Wait for it to finish, or restart anyway. The update also installs the next time you close the app.',
+      buttons: ['Wait', 'Restart anyway'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (wait.response !== 1) return;
+  }
+  setImmediate(() => autoUpdater.quitAndInstall(true, true));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     title: APP_TITLE,
@@ -175,6 +249,7 @@ function start() {
     registerAppProtocol();
     configureSession(session.defaultSession);
     createWindow();
+    startAutoUpdates();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

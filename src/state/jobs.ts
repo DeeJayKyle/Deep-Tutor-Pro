@@ -34,6 +34,8 @@ export function useJobs(): Job[] {
   );
 }
 
+/** True while any background AI task is still working (do not reload then). */
+export const anyRunning = () => jobs.some((j) => j.status === 'running');
 export const isRunning = (id: string) => jobs.some((j) => j.id === id && j.status === 'running');
 
 export interface JobContext {

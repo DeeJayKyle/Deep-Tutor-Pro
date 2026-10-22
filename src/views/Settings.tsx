@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CloudDownload, Download, LogIn, LogOut, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import type { GradeBand, GradeComponent, ProviderChoice, Workspace } from '../lib/model';
-import { cloud, DEFAULT_SERVER, getSession, sameOriginServer, signIn, signOut, status as serverStatus, type ServerStatus, type SyncMeta } from '../lib/api';
+import { cloud, createAccount, DEFAULT_SERVER, getSession, sameOriginServer, signIn, signOut, status as serverStatus, type ServerStatus, type SyncMeta } from '../lib/api';
 import { saveBlob } from '../lib/exporters';
 import { storageEstimate } from '../lib/db';
 import { mergeWorkspaces, sha256 } from '../lib/sync';
@@ -10,7 +10,8 @@ import { navigate, useRoute } from '../state/router';
 import { replaceWorkspace, runSync, setSettings, store, useSyncStatus, useWorkspace } from '../state/store';
 import { formatBytes } from '../state/library';
 import { APP_VERSION } from '../lib/version';
-import { Badge, Button, Card, EditableText, Field, FileButton, Input, Page, Select, Tabs, useAction, useUi } from '../ui/kit';
+import { createProblem } from '../lib/account';
+import { Badge, Button, Card, EditableText, Field, FileButton, Input, Page, Select, Tabs, useAction, useUi, cx } from '../ui/kit';
 
 type Tab = 'account' | 'ai' | 'institution' | 'grading' | 'data';
 
@@ -46,6 +47,8 @@ function Account() {
   const [server, setServer] = useState(session?.server ?? sameOriginServer() ?? DEFAULT_SERVER);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [mode, setMode] = useState<'signin' | 'create'>('signin');
   const [st, setSt] = useState<ServerStatus | null>(null);
   const [, force] = useState(0);
   useEffect(() => {
@@ -87,34 +90,65 @@ function Account() {
       </Card>
     );
   return (
-    <Card title="Sign in to your DeepTutor server">
+    <Card title={mode === 'create' ? 'Create your Deep Tutor Pro account' : 'Sign in to your DeepTutor server'}>
       <p className="mb-4 max-w-2xl text-sm text-muted">
-        AI features and cloud sync run on your DeepTutor server, which holds the OpenAI / Gemini keys — they are never stored in this app. Use the same account as the DeepTutor website. Without signing in, everything except AI and sync still works on this device.
+        AI features and cloud sync run on your DeepTutor server, which holds the OpenAI / Gemini keys — they are never stored in this app. Without signing in, everything except AI and sync still works on this device.
       </p>
+      <div role="group" aria-label="Account" className="mb-4 inline-flex rounded-lg border border-line p-0.5">
+        {(
+          [
+            ['signin', 'I have an account'],
+            ['create', 'Create an account'],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" aria-pressed={mode === id} onClick={() => setMode(id)} className={cx('min-h-9 rounded-md px-3 text-sm', mode === id ? 'bg-accent-solid font-medium text-accent-ink' : 'text-muted hover:text-ink')}>
+            {label}
+          </button>
+        ))}
+      </div>
       <form
         className="grid max-w-md gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void run('login', async () => {
-            await signIn(server, username.trim(), password);
-            setPassword('');
-            force((n) => n + 1);
-          }, 'Signed in — AI and cloud sync are on');
+          if (mode === 'create')
+            void run('login', async () => {
+              await createAccount(server, username.trim(), password);
+              setPassword('');
+              setConfirmPw('');
+              force((n) => n + 1);
+            }, 'Account created — AI and cloud sync are on');
+          else
+            void run('login', async () => {
+              await signIn(server, username.trim(), password);
+              setPassword('');
+              force((n) => n + 1);
+            }, 'Signed in — AI and cloud sync are on');
         }}
       >
         <Field label="Server address">
           <Input value={server} onChange={(e) => setServer(e.target.value)} inputMode="url" />
         </Field>
-        <Field label="Username">
+        <Field label={mode === 'create' ? 'Choose a username or use your email' : 'Username'}>
           <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
         </Field>
         <Field label="Password">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'create' ? 'new-password' : 'current-password'} />
         </Field>
-        <Button type="submit" variant="primary" icon={<LogIn className="h-4 w-4" />} busy={busy === 'login'} disabled={!username || !password}>
-          Sign in
+        {mode === 'create' && (
+          <Field label="Repeat password">
+            <Input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+          </Field>
+        )}
+        {mode === 'create' && createProblem(username, password, confirmPw) && <p className="text-sm text-muted">{createProblem(username, password, confirmPw)}</p>}
+        <Button type="submit" variant="primary" icon={<LogIn className="h-4 w-4" />} busy={busy === 'login'} disabled={mode === 'create' ? !!createProblem(username, password, confirmPw) : !username || !password}>
+          {mode === 'create' ? 'Create account' : 'Sign in'}
         </Button>
-        <p className="text-xs text-muted">The first sign-in can take up to a minute while the server wakes up.</p>
+        <p className="text-xs text-muted">
+          {mode === 'create'
+            ? 'Your account is private: your workspace and cloud copy are visible only to you. '
+            : 'Use the same account as the DeepTutor website. '}
+          The first request can take up to a minute while the server wakes up.
+        </p>
       </form>
     </Card>
   );

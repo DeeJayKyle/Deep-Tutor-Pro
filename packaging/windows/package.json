@@ -1,20 +1,37 @@
 {
   "name": "deep-tutor-pro-desktop",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Deep Tutor Pro desktop learning workspace",
   "author": "Deep Tutor Pro contributors",
   "license": "Apache-2.0",
   "main": "main.cjs",
-  "devDependencies": { "electron": "44.9.0", "electron-builder": "26.15.3" },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3"
+  },
   "build": {
     "appId": "com.deejaykyle.deeptutorpro",
     "productName": "Deep Tutor Pro",
-    "directories": { "output": "out" },
-    "files": ["main.cjs", "web/**/*", "package.json"],
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "main.cjs",
+      "web/**/*",
+      "package.json"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "../icons/icon.png",
-      "artifactName": "Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}"
+      "artifactName": "Deep-Tutor-Pro-${version}-Windows-x64-Setup.${ext}",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
@@ -22,6 +39,17 @@
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
       "shortcutName": "Deep Tutor Pro"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "DeeJayKyle",
+        "repo": "Deep-Tutor-Pro",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

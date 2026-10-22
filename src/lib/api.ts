@@ -79,7 +79,20 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+let inFlight = 0;
+/** Number of server requests still waiting for an answer (e.g. an AI reply). */
+export const requestsInFlight = () => inFlight;
+
 export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  inFlight++;
+  try {
+    return await send<T>(path, opts);
+  } finally {
+    inFlight--;
+  }
+}
+
+async function send<T>(path: string, opts: RequestOptions): Promise<T> {
   if (!isOnline()) throw new ApiError('You are offline. This needs an internet connection; everything else keeps working.', 0);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), opts.timeout ?? 60_000);
@@ -130,11 +143,37 @@ export interface ServerStatus {
 }
 
 export async function signIn(server: string, username: string, password: string): Promise<Session> {
+  return authenticate(server, '/api/tutorpro/auth/login', { username, password });
+}
+
+/** Create a tutor account on the server (an ordinary user with a private workspace) and sign in to it. */
+export async function createAccount(server: string, username: string, password: string): Promise<Session> {
+  try {
+    return await authenticate(server, '/api/tutorpro/auth/register', { username, password });
+  } catch (err) {
+    // A server without sign-up still answers /ping; anything else is the wrong address.
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405) && (await isTutorProServer(server)))
+      throw new ApiError('This server does not offer sign-up yet. Ask its owner for an account.', err.status, err.detail);
+    throw err;
+  }
+}
+
+async function isTutorProServer(server: string): Promise<boolean> {
+  const base = server.trim().replace(/\/+$/, '') || DEFAULT_SERVER;
+  try {
+    const res = await fetch(`${base}/api/tutorpro/ping`, { credentials: 'omit' });
+    return res.ok && ((await res.json()) as { app?: string }).app === 'deep-tutor-pro';
+  } catch {
+    return false;
+  }
+}
+
+async function authenticate(server: string, path: string, body: { username: string; password: string }): Promise<Session> {
   const base = server.trim().replace(/\/+$/, '') || DEFAULT_SERVER;
   const prev = session;
   session = { server: base, token: '', username: '', role: '' };
   try {
-    const res = await request<{ token: string; username: string; role: string }>('/api/tutorpro/auth/login', { body: { username, password }, auth: false, timeout: 90_000 });
+    const res = await request<{ token: string; username: string; role: string }>(path, { body, auth: false, timeout: 90_000 });
     const s: Session = { server: base, token: res.token, username: res.username, role: res.role };
     await setSession(s);
     return s;

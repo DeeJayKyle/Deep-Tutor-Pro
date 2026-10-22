@@ -75,3 +75,14 @@ describe('Home next steps', () => {
     expect(steps.map((s) => s.title)).not.toContain('Review 1 draft paper');
   });
 });
+
+describe('new account form', () => {
+  it('explains what is missing before the account can be created', async () => {
+    const { createProblem } = await import('../src/lib/account');
+    expect(createProblem('', 'longenough', 'longenough')).toMatch(/Choose a username/);
+    expect(createProblem('a b', 'longenough', 'longenough')).toMatch(/3–64 letters/);
+    expect(createProblem('amina', 'short', 'short')).toMatch(/at least 8/);
+    expect(createProblem('amina', 'longenough', 'different')).toMatch(/different/);
+    expect(createProblem('amina@school.ac.ke', 'longenough', 'longenough')).toBe('');
+  });
+});

@@ -82,6 +82,8 @@ export async function installFakeServer(page: Page): Promise<FakeServer> {
     }
     const b = (body ?? {}) as Record<string, any>;
     switch (path) {
+      case '/tutorpro/auth/register':
+        return b.username === 'taken' ? json(route, { detail: 'That username is taken. Choose another, or sign in.' }, 409) : json(route, { ok: true, token: 'new-token', username: b.username, role: 'user', auth: true }, 201);
       case '/tutorpro/auth/login':
         return b.password === 'secret' ? json(route, { ok: true, token: 'test-token', username: b.username, role: 'admin', auth: true }) : json(route, { detail: 'Incorrect username or password' }, 401);
       case '/tutorpro/status':

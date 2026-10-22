@@ -23,7 +23,7 @@ export function nextSteps(ws: Workspace, signedIn: boolean): Step[] {
   const covered = coveredTopics(ws);
   if (!ws.programmes.length && !ws.units.length)
     steps.push({ icon: GraduationCap, title: 'Import your curriculum', detail: 'Upload the curriculum or teacher’s guide; classes, units, outlines and contact hours are built from it.', to: '/curriculum?import=1', action: 'Import' });
-  if (!signedIn) steps.push({ icon: LogIn, title: 'Sign in to switch on AI and sync', detail: 'Notes, exams, Deep Solve and cloud backup need your DeepTutor server.', to: '/settings', action: 'Sign in' });
+  if (!signedIn) steps.push({ icon: LogIn, title: 'Sign in to switch on AI and sync', detail: 'Notes, exams, Deep Solve and cloud backup need your DeepTutor server. New to it? You can create an account in Settings.', to: '/settings', action: 'Sign in' });
   const pending = ws.units.filter((u) => !u.analysed);
   if (pending.length) {
     const p = ws.programmes.find((x) => x.id === pending[0].programmeId);

@@ -25,6 +25,7 @@ import { adoptCookieSession, getSession, loadSession, onSession } from './lib/ap
 import { Button, Spinner, UiProvider, cx } from './ui/kit';
 import { ConflictDialog } from './views/ConflictDialog';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { UpdateBanner } from './ui/UpdateBanner';
 import { CommandPalette } from './ui/CommandPalette';
 import { cancelJob, dismissJob, useJobs } from './state/jobs';
 
@@ -284,6 +285,7 @@ function Shell() {
           </div>
         </header>
         {saveError && <div className="no-print border-b border-bad/40 bg-bad/10 px-4 py-2 text-sm text-bad">{saveError}</div>}
+        <UpdateBanner />
         <main className="flex-1 overflow-y-auto pb-20 lg:pb-0" id="main">
           <ErrorBoundary resetKey={route.path}>
             <Suspense fallback={<div className="p-8"><Spinner label="Loading…" /></div>}>{routeView(route.parts[0])}</Suspense>

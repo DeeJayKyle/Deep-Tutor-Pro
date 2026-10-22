@@ -266,3 +266,48 @@ test('search (Ctrl+K) jumps to a student and stays out of the way of open dialog
   await expect(page.getByRole('dialog', { name: 'Search everything' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('a new tutor can create their own account from Settings', async ({ page }) => {
+  const errors = collectErrors(page);
+  await installFakeServer(page);
+  await page.goto('/#/settings');
+  await page.getByRole('button', { name: 'Create an account' }).click();
+  const create = page.getByRole('button', { name: 'Create account', exact: true });
+  await page.getByLabel('Choose a username or use your email').fill('taken');
+  await page.getByLabel('Password', { exact: true }).fill('longenough');
+  await expect(create).toBeDisabled();
+  await expect(page.getByText('The two passwords are different.')).toBeVisible();
+  await page.getByLabel('Repeat password').fill('longenough');
+  await create.click();
+  await expect(page.getByText('That username is taken. Choose another, or sign in.')).toBeVisible();
+
+  await page.getByLabel('Choose a username or use your email').fill('amina.n');
+  await page.getByLabel('Password', { exact: true }).fill('longenough');
+  await page.getByLabel('Repeat password').fill('longenough');
+  await create.click();
+  await expect(page.getByText('Signed in', { exact: true })).toBeVisible();
+  await expect(page.getByText('amina.n')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('the Android app offers a newer release from GitHub', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.addInitScript(() => {
+    (globalThis as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
+  });
+  await page.route('https://api.github.com/repos/DeeJayKyle/Deep-Tutor-Pro/releases/latest', (route) =>
+    route.fulfill({
+      json: {
+        tag_name: 'v99.0.0',
+        html_url: 'https://github.com/DeeJayKyle/Deep-Tutor-Pro/releases/tag/v99.0.0',
+        assets: [{ name: 'Deep-Tutor-Pro-99.0.0-Android.apk', browser_download_url: 'https://github.com/DeeJayKyle/Deep-Tutor-Pro/releases/download/v99.0.0/Deep-Tutor-Pro-99.0.0-Android.apk' }],
+      },
+    }),
+  );
+  await page.goto('/#/');
+  await expect(page.getByText('Deep Tutor Pro 99.0.0 is available.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download update' })).toHaveAttribute('href', /Deep-Tutor-Pro-99\.0\.0-Android\.apk$/);
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByText('is available.', { exact: false })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
